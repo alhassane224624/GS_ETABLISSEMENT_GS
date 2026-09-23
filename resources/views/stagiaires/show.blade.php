@@ -1,375 +1,536 @@
-@extends('layouts.app')
+@extends('layouts.app-stagiaire')
 
-@section('title', 'Détails Stagiaire')
+@section('title', 'Mon Profil')
+@section('page-title', 'Mon Profil')
 
 @section('content')
-<div class="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 py-8">
-    <div class="container mx-auto px-4 max-w-7xl space-y-6">
+<div class="container-fluid profile-page">
 
-        <!-- Header avec effet glassmorphism -->
-        <div class="relative overflow-hidden bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/20 p-6">
-            <div class="absolute inset-0 bg-gradient-to-r from-blue-600/5 via-purple-600/5 to-pink-600/5"></div>
-            <div class="relative flex flex-col md:flex-row items-center justify-between gap-4">
-                <div class="flex items-center gap-4">
-                    <div class="h-14 w-14 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-xl">
-                        <i class="fas fa-user-graduate text-2xl"></i>
-                    </div>
-                    <div>
-                        <h1 class="text-3xl font-black text-gray-900">Profil Stagiaire</h1>
-                        <p class="text-sm text-gray-600">Informations détaillées et statistiques</p>
-                    </div>
+    <!-- ===================== BANDEAU DE COUVERTURE ===================== -->
+    <div class="profile-cover rounded-4 mb-5 position-relative">
+        <div class="profile-cover-pattern rounded-4"></div>
+        <div class="profile-cover-glow"></div>
+        <div class="profile-cover-ring"></div>
+
+        <div class="position-relative px-4 px-md-5 pb-4 pt-5 d-flex flex-column flex-md-row align-items-center align-items-md-end gap-4">
+            <div class="avatar-wrap">
+                <img src="{{ $stagiaire->photo_url }}"
+                     alt="{{ $stagiaire->nom_complet }}"
+                     class="profile-avatar rounded-circle">
+                <span class="avatar-status" title="{{ $stagiaire->statut_libelle }}">
+                    <i class="fas fa-check"></i>
+                </span>
+            </div>
+
+            <div class="text-center text-md-start flex-grow-1 pb-2">
+                <div class="d-flex flex-column flex-md-row align-items-center align-items-md-center gap-md-3">
+                    <h3 class="fw-bold text-white mb-0">{{ $stagiaire->nom }} {{ $stagiaire->prenom }}</h3>
+                    <span class="badge-glass mt-2 mt-md-0">
+                        <i class="fas fa-check-circle me-1"></i> {{ $stagiaire->statut_libelle }}
+                    </span>
                 </div>
-                <div class="flex gap-3">
-                    <a href="{{ route('stagiaires.edit', $stagiaire) }}" 
-                       class="group inline-flex items-center px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105">
-                        <i class="fas fa-edit mr-2 group-hover:rotate-12 transition-transform"></i>
-                        Modifier
-                    </a>
-                    <a href="{{ route('stagiaires.index') }}" 
-                       class="inline-flex items-center px-5 py-2.5 bg-white hover:bg-gray-50 text-gray-700 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 border-2 border-gray-200">
-                        <i class="fas fa-arrow-left mr-2"></i>
-                        Retour
-                    </a>
+                <p class="cover-subline mb-0 mt-2">
+                    <span><i class="fas fa-id-badge me-1"></i> {{ $stagiaire->matricule }}</span>
+                    <span class="dot-sep"></span>
+                    <span><i class="fas fa-book me-1"></i> {{ $stagiaire->filiere->nom ?? 'N/A' }}</span>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================== CHIPS STATISTIQUES ===================== -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-lg-3">
+            <div class="quick-stat">
+                <div class="quick-stat-icon icon-indigo">
+                    <i class="fas fa-book"></i>
+                </div>
+                <div class="min-w-0">
+                    <small class="text-muted d-block">Filière</small>
+                    <strong class="text-truncate d-block">{{ $stagiaire->filiere->nom ?? 'N/A' }}</strong>
                 </div>
             </div>
         </div>
+        <div class="col-6 col-lg-3">
+            <div class="quick-stat">
+                <div class="quick-stat-icon icon-cyan">
+                    <i class="fas fa-layer-group"></i>
+                </div>
+                <div class="min-w-0">
+                    <small class="text-muted d-block">Niveau</small>
+                    <strong class="text-truncate d-block">{{ $stagiaire->niveau->nom ?? 'N/A' }}</strong>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="quick-stat">
+                <div class="quick-stat-icon icon-amber">
+                    <i class="fas fa-chalkboard"></i>
+                </div>
+                <div class="min-w-0">
+                    <small class="text-muted d-block">Classe</small>
+                    <strong class="text-truncate d-block">{{ $stagiaire->classe->nom ?? 'N/A' }}</strong>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="quick-stat">
+                <div class="quick-stat-icon icon-emerald">
+                    <i class="fas fa-birthday-cake"></i>
+                </div>
+                <div class="min-w-0">
+                    <small class="text-muted d-block">Âge</small>
+                    <strong class="text-truncate d-block">
+                        @if($stagiaire->date_naissance)
+                            {{ $stagiaire->age }} ans
+                        @else
+                            <span class="text-muted">N/A</span>
+                        @endif
+                    </strong>
+                </div>
+            </div>
+        </div>
+    </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <!-- Colonne gauche -->
-            <div class="lg:col-span-1 space-y-6">
-                
-                <!-- Carte Profil avec Avatar -->
-                <div class="relative overflow-hidden bg-white/90 backdrop-blur-xl rounded-3xl shadow-xl border border-white/20">
-                    <div class="absolute inset-0 bg-gradient-to-br from-blue-600/10 via-purple-600/10 to-pink-600/10"></div>
-                    <div class="relative p-6">
-                        <div class="text-center">
-                            <!-- Avatar avec effet 3D -->
-                            <div class="relative inline-block mb-4">
-                                <div class="absolute inset-0 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full blur-2xl opacity-30 animate-pulse"></div>
-                                <img src="{{ $stagiaire->photo_url }}" 
-                                     alt="{{ $stagiaire->nom_complet }}" 
-                                     class="relative w-32 h-32 rounded-full mx-auto object-cover border-4 border-white shadow-2xl transform hover:scale-110 transition-all duration-300">
-                            </div>
-                            
-                            <h2 class="text-2xl font-black text-gray-900 mb-1">{{ $stagiaire->nom_complet }}</h2>
-                            <p class="text-sm font-mono text-gray-600 mb-3 bg-gray-100 inline-block px-3 py-1 rounded-lg">{{ $stagiaire->matricule }}</p>
-                            
-                            @php
-                                $statutConfig = [
-                                    'actif' => ['bg' => 'from-emerald-500 to-green-600', 'icon' => 'fa-check-circle'],
-                                    'suspendu' => ['bg' => 'from-yellow-500 to-amber-600', 'icon' => 'fa-pause-circle'],
-                                    'diplome' => ['bg' => 'from-blue-500 to-indigo-600', 'icon' => 'fa-graduation-cap'],
-                                    'abandonne' => ['bg' => 'from-red-500 to-rose-600', 'icon' => 'fa-times-circle'],
-                                    'transfere' => ['bg' => 'from-purple-500 to-violet-600', 'icon' => 'fa-exchange-alt'],
-                                ];
-                                $config = $statutConfig[$stagiaire->statut] ?? ['bg' => 'from-gray-500 to-slate-600', 'icon' => 'fa-circle'];
-                            @endphp
-                            
-                            <div class="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r {{ $config['bg'] }} text-white rounded-full font-semibold text-sm shadow-lg">
-                                <i class="fas {{ $config['icon'] }}"></i>
-                                {{ $stagiaire->statut_libelle }}
-                            </div>
-
-                            @if($stagiaire->motif_statut)
-                            <div class="mt-4 p-3 bg-blue-50 border-l-4 border-blue-500 rounded-lg text-left">
-                                <p class="text-sm text-gray-700"><i class="fas fa-info-circle text-blue-600 mr-2"></i>{{ $stagiaire->motif_statut }}</p>
-                            </div>
-                            @endif
+    <div class="row g-4">
+        <!-- ===================== COLONNE GAUCHE ===================== -->
+        <div class="col-lg-4">
+            <div class="card profile-card mb-4">
+                <div class="card-header">
+                    <h6 class="mb-0 fw-bold">
+                        <span class="header-icon icon-indigo"><i class="fas fa-address-card"></i></span>
+                        Informations de Contact
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="info-line">
+                        <div class="info-line-icon icon-emerald">
+                            <i class="fas fa-phone"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <small class="text-muted d-block">Téléphone</small>
+                            <strong class="{{ $stagiaire->telephone ? '' : 'text-muted fst-italic fw-normal' }}">
+                                {{ $stagiaire->telephone ?: 'Non renseigné' }}
+                            </strong>
+                        </div>
+                    </div>
+                    <div class="info-line">
+                        <div class="info-line-icon icon-indigo">
+                            <i class="fas fa-envelope"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <small class="text-muted d-block">Email</small>
+                            <strong class="text-break {{ $stagiaire->email ? '' : 'text-muted fst-italic fw-normal' }}">
+                                {{ $stagiaire->email ?: 'Non renseigné' }}
+                            </strong>
+                        </div>
+                    </div>
+                    <div class="info-line is-last">
+                        <div class="info-line-icon icon-rose">
+                            <i class="fas fa-map-marker-alt"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <small class="text-muted d-block">Adresse</small>
+                            <strong class="{{ $stagiaire->adresse ? '' : 'text-muted fst-italic fw-normal' }}">
+                                {{ $stagiaire->adresse ?: 'Non renseignée' }}
+                            </strong>
                         </div>
                     </div>
                 </div>
-
-                <!-- Statistiques Visuelles -->
-                <div class="bg-white/90 backdrop-blur-xl rounded-3xl shadow-xl border border-white/20 overflow-hidden">
-                    <div class="bg-gradient-to-r from-indigo-600 to-purple-600 p-5">
-                        <h3 class="text-lg font-bold text-white flex items-center gap-2">
-                            <i class="fas fa-chart-pie"></i>
-                            Statistiques
-                        </h3>
-                    </div>
-                    <div class="p-6 space-y-4">
-                        @php
-                            $stats_items = [
-                                ['label' => 'Total Notes', 'value' => $stats['total_notes'], 'icon' => 'fa-clipboard-check', 'color' => 'blue'],
-                                ['label' => 'Moyenne', 'value' => number_format($stats['moyenne_generale'], 2) . '/20', 'icon' => 'fa-chart-line', 'color' => $stats['moyenne_generale'] >= 10 ? 'green' : 'red'],
-                                ['label' => 'Absences', 'value' => $stats['total_absences'], 'icon' => 'fa-calendar-times', 'color' => 'orange'],
-                                ['label' => 'Injustifiées', 'value' => $stats['absences_injustifiees'], 'icon' => 'fa-exclamation-triangle', 'color' => 'red'],
-                            ];
-                        @endphp
-                        
-                        @foreach($stats_items as $item)
-                        <div class="group flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-{{ $item['color'] }}-50 to-{{ $item['color'] }}-100 hover:shadow-lg transition-all duration-300">
-                            <div class="flex items-center gap-3">
-                                <div class="h-12 w-12 rounded-xl bg-{{ $item['color'] }}-500 text-white flex items-center justify-center transform group-hover:scale-110 group-hover:rotate-6 transition-all shadow-lg">
-                                    <i class="fas {{ $item['icon'] }} text-lg"></i>
-                                </div>
-                                <span class="font-semibold text-gray-700">{{ $item['label'] }}</span>
-                            </div>
-                            <span class="text-2xl font-black text-{{ $item['color'] }}-600">{{ $item['value'] }}</span>
-                        </div>
-                        @endforeach
-                    </div>
-                </div>
-
-                <!-- Changement de Statut -->
-                <div class="bg-white/90 backdrop-blur-xl rounded-3xl shadow-xl border border-white/20 overflow-hidden">
-                    <div class="bg-gradient-to-r from-orange-600 to-red-600 p-5">
-                        <h3 class="text-lg font-bold text-white flex items-center gap-2">
-                            <i class="fas fa-exchange-alt"></i>
-                            Changer le Statut
-                        </h3>
-                    </div>
-                    <div class="p-6">
-                        <form action="{{ route('stagiaires.change-statut', $stagiaire) }}" method="POST" class="space-y-4">
-                            @csrf
-                            <div>
-                                <label class="block text-sm font-semibold text-gray-700 mb-2">Nouveau Statut</label>
-                                <select name="statut" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all">
-                                    <option value="actif" {{ $stagiaire->statut == 'actif' ? 'selected' : '' }}>✅ Actif</option>
-                                    <option value="suspendu" {{ $stagiaire->statut == 'suspendu' ? 'selected' : '' }}>⏸️ Suspendu</option>
-                                    <option value="diplome" {{ $stagiaire->statut == 'diplome' ? 'selected' : '' }}>🎓 Diplômé</option>
-                                    <option value="abandonne" {{ $stagiaire->statut == 'abandonne' ? 'selected' : '' }}>❌ Abandonné</option>
-                                    <option value="transfere" {{ $stagiaire->statut == 'transfere' ? 'selected' : '' }}>🔄 Transféré</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-semibold text-gray-700 mb-2">Motif</label>
-                                <textarea name="motif_statut" rows="3" placeholder="Raison du changement..." 
-                                          class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none"></textarea>
-                            </div>
-                            <button type="submit" 
-                                    class="w-full px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-bold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105">
-                                <i class="fas fa-save mr-2"></i>
-                                Enregistrer
-                            </button>
-                        </form>
-                    </div>
-                </div>
-
             </div>
 
-            <!-- Colonne droite -->
-            <div class="lg:col-span-2 space-y-6">
-                
-                <!-- Informations Personnelles -->
-                <div class="bg-white/90 backdrop-blur-xl rounded-3xl shadow-xl border border-white/20 overflow-hidden">
-                    <div class="bg-gradient-to-r from-blue-600 to-cyan-600 p-5">
-                        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+            <!-- Informations tuteur -->
+            @if($stagiaire->nom_tuteur || $stagiaire->telephone_tuteur || $stagiaire->email_tuteur)
+            <div class="card profile-card">
+                <div class="card-header">
+                    <h6 class="mb-0 fw-bold">
+                        <span class="header-icon icon-amber"><i class="fas fa-users"></i></span>
+                        Informations du Tuteur
+                    </h6>
+                </div>
+                <div class="card-body">
+                    @if($stagiaire->nom_tuteur)
+                    <div class="info-line">
+                        <div class="info-line-icon icon-amber">
                             <i class="fas fa-user"></i>
-                            Informations Personnelles
-                        </h3>
+                        </div>
+                        <div class="min-w-0">
+                            <small class="text-muted d-block">Nom</small>
+                            <strong>{{ $stagiaire->nom_tuteur }}</strong>
+                        </div>
                     </div>
-                    <div class="p-6">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            @php
-                                $personal_info = [
-                                    ['label' => 'Date de Naissance', 'value' => $stagiaire->date_naissance ? $stagiaire->date_naissance->format('d/m/Y') . ($stagiaire->age ? " ({$stagiaire->age} ans)" : '') : 'N/A', 'icon' => 'fa-birthday-cake'],
-                                    ['label' => 'Lieu de Naissance', 'value' => $stagiaire->lieu_naissance ?? 'N/A', 'icon' => 'fa-map-marker-alt'],
-                                    ['label' => 'Sexe', 'value' => $stagiaire->sexe == 'M' ? '👨 Masculin' : ($stagiaire->sexe == 'F' ? '👩 Féminin' : 'N/A'), 'icon' => 'fa-venus-mars'],
-                                    ['label' => 'Téléphone', 'value' => $stagiaire->telephone ?? 'N/A', 'icon' => 'fa-phone'],
-                                    ['label' => 'Email', 'value' => $stagiaire->email ?? 'N/A', 'icon' => 'fa-envelope'],
-                                    ['label' => 'Adresse', 'value' => $stagiaire->adresse ?? 'N/A', 'icon' => 'fa-home'],
-                                ];
-                            @endphp
-                            
-                            @foreach($personal_info as $info)
-                            <div class="group p-4 rounded-xl bg-gradient-to-br from-gray-50 to-blue-50 border border-gray-200 hover:border-blue-300 hover:shadow-md transition-all duration-300">
-                                <div class="flex items-center gap-3 mb-2">
-                                    <i class="fas {{ $info['icon'] }} text-blue-600"></i>
-                                    <p class="text-xs font-bold text-gray-600 uppercase tracking-wide">{{ $info['label'] }}</p>
-                                </div>
-                                <p class="text-sm font-semibold text-gray-900 pl-7">{{ $info['value'] }}</p>
-                            </div>
-                            @endforeach
+                    @endif
+                    @if($stagiaire->telephone_tuteur)
+                    <div class="info-line">
+                        <div class="info-line-icon icon-emerald">
+                            <i class="fas fa-phone"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <small class="text-muted d-block">Téléphone</small>
+                            <strong>{{ $stagiaire->telephone_tuteur }}</strong>
+                        </div>
+                    </div>
+                    @endif
+                    @if($stagiaire->email_tuteur)
+                    <div class="info-line is-last">
+                        <div class="info-line-icon icon-indigo">
+                            <i class="fas fa-envelope"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <small class="text-muted d-block">Email</small>
+                            <strong class="text-break">{{ $stagiaire->email_tuteur }}</strong>
+                        </div>
+                    </div>
+                    @endif
+                </div>
+            </div>
+            @endif
+        </div>
+
+        <!-- ===================== COLONNE DROITE ===================== -->
+        <div class="col-lg-8">
+            <!-- Informations personnelles -->
+            <div class="card profile-card mb-4">
+                <div class="card-header">
+                    <h6 class="mb-0 fw-bold">
+                        <span class="header-icon icon-indigo"><i class="fas fa-user"></i></span>
+                        Informations Personnelles
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row g-4">
+                        <div class="col-md-6">
+                            <small class="text-muted d-block mb-1">Date de Naissance</small>
+                            <strong>
+                                @if($stagiaire->date_naissance)
+                                    {{ $stagiaire->date_naissance->format('d/m/Y') }}
+                                    <span class="badge-soft icon-cyan ms-2">{{ $stagiaire->age }} ans</span>
+                                @else
+                                    <span class="text-muted fst-italic fw-normal">Non renseignée</span>
+                                @endif
+                            </strong>
+                        </div>
+                        <div class="col-md-6">
+                            <small class="text-muted d-block mb-1">Lieu de Naissance</small>
+                            <strong class="{{ $stagiaire->lieu_naissance ? '' : 'text-muted fst-italic fw-normal' }}">
+                                {{ $stagiaire->lieu_naissance ?? 'Non renseigné' }}
+                            </strong>
+                        </div>
+                        <div class="col-md-6">
+                            <small class="text-muted d-block mb-1">Sexe</small>
+                            <strong>
+                                @if($stagiaire->sexe == 'M')
+                                    <i class="fas fa-mars text-primary me-1"></i> Masculin
+                                @elseif($stagiaire->sexe == 'F')
+                                    <i class="fas fa-venus text-pink me-1"></i> Féminin
+                                @else
+                                    <span class="text-muted fst-italic fw-normal">Non renseigné</span>
+                                @endif
+                            </strong>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <!-- Informations Tuteur -->
-                <div class="bg-white/90 backdrop-blur-xl rounded-3xl shadow-xl border border-white/20 overflow-hidden">
-                    <div class="bg-gradient-to-r from-purple-600 to-pink-600 p-5">
-                        <h3 class="text-lg font-bold text-white flex items-center gap-2">
-                            <i class="fas fa-users"></i>
-                            Informations du Tuteur
-                        </h3>
-                    </div>
-                    <div class="p-6">
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            @php
-                                $tuteur_info = [
-                                    ['label' => 'Nom', 'value' => $stagiaire->nom_tuteur ?? 'N/A', 'icon' => 'fa-user-tie'],
-                                    ['label' => 'Téléphone', 'value' => $stagiaire->telephone_tuteur ?? 'N/A', 'icon' => 'fa-phone'],
-                                    ['label' => 'Email', 'value' => $stagiaire->email_tuteur ?? 'N/A', 'icon' => 'fa-envelope'],
-                                ];
-                            @endphp
-                            
-                            @foreach($tuteur_info as $info)
-                            <div class="p-4 rounded-xl bg-gradient-to-br from-purple-50 to-pink-50 border border-purple-200">
-                                <div class="flex items-center gap-2 mb-2">
-                                    <i class="fas {{ $info['icon'] }} text-purple-600"></i>
-                                    <p class="text-xs font-bold text-gray-600 uppercase">{{ $info['label'] }}</p>
-                                </div>
-                                <p class="text-sm font-semibold text-gray-900">{{ $info['value'] }}</p>
-                            </div>
-                            @endforeach
+            <!-- Informations scolaires -->
+            <div class="card profile-card mb-4">
+                <div class="card-header">
+                    <h6 class="mb-0 fw-bold">
+                        <span class="header-icon icon-emerald"><i class="fas fa-graduation-cap"></i></span>
+                        Informations Scolaires
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row g-4">
+                        <div class="col-md-6">
+                            <small class="text-muted d-block mb-1">Filière</small>
+                            <strong class="text-primary">
+                                <i class="fas fa-book me-1"></i>
+                                {{ $stagiaire->filiere->nom ?? 'N/A' }}
+                            </strong>
+                        </div>
+                        <div class="col-md-6">
+                            <small class="text-muted d-block mb-1">Niveau</small>
+                            <strong>{{ $stagiaire->niveau->nom ?? 'N/A' }}</strong>
+                        </div>
+                        <div class="col-md-6">
+                            <small class="text-muted d-block mb-1">Classe</small>
+                            <strong>{{ $stagiaire->classe->nom ?? 'N/A' }}</strong>
+                        </div>
+                        <div class="col-md-6">
+                            <small class="text-muted d-block mb-1">Date d'Inscription</small>
+                            <strong>
+                                @if($stagiaire->date_inscription)
+                                    {{ $stagiaire->date_inscription->format('d/m/Y') }}
+                                @else
+                                    <span class="text-muted fst-italic fw-normal">Non renseignée</span>
+                                @endif
+                            </strong>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <!-- Informations Scolaires -->
-                <div class="bg-white/90 backdrop-blur-xl rounded-3xl shadow-xl border border-white/20 overflow-hidden">
-                    <div class="bg-gradient-to-r from-orange-600 to-amber-600 p-5">
-                        <h3 class="text-lg font-bold text-white flex items-center gap-2">
-                            <i class="fas fa-graduation-cap"></i>
-                            Informations Scolaires
-                        </h3>
+            <!-- Bandeau d'aide -->
+            <div class="help-banner">
+                <div class="d-flex align-items-start gap-3">
+                    <div class="help-icon flex-shrink-0">
+                        <i class="fas fa-info-circle"></i>
                     </div>
-                    <div class="p-6">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            @php
-                                $school_info = [
-                                    ['label' => 'Filière', 'value' => $stagiaire->filiere->nom ?? 'N/A', 'icon' => 'fa-book', 'color' => 'blue'],
-                                    ['label' => 'Niveau', 'value' => $stagiaire->niveau->nom ?? 'N/A', 'icon' => 'fa-layer-group', 'color' => 'indigo'],
-                                    ['label' => 'Classe', 'value' => $stagiaire->classe->nom ?? 'N/A', 'icon' => 'fa-door-open', 'color' => 'purple'],
-                                    ['label' => 'Date Inscription', 'value' => $stagiaire->date_inscription ? $stagiaire->date_inscription->format('d/m/Y') : 'N/A', 'icon' => 'fa-calendar-check', 'color' => 'green'],
-                                    ['label' => 'Frais Inscription', 'value' => $stagiaire->frais_inscription ? number_format($stagiaire->frais_inscription, 2) . ' DH' : 'N/A', 'icon' => 'fa-money-bill-wave', 'color' => 'emerald'],
-                                    ['label' => 'Paiement', 'value' => $stagiaire->frais_payes ? '✅ Payé' : '❌ Non payé', 'icon' => 'fa-credit-card', 'color' => $stagiaire->frais_payes ? 'green' : 'red'],
-                                ];
-                            @endphp
-                            
-                            @foreach($school_info as $info)
-                            <div class="group p-4 rounded-xl bg-gradient-to-br from-{{ $info['color'] }}-50 to-white border border-{{ $info['color'] }}-200 hover:shadow-lg transition-all">
-                                <div class="flex items-center gap-3 mb-2">
-                                    <div class="h-8 w-8 rounded-lg bg-{{ $info['color'] }}-500 text-white flex items-center justify-center text-sm transform group-hover:scale-110 transition-transform">
-                                        <i class="fas {{ $info['icon'] }}"></i>
-                                    </div>
-                                    <p class="text-xs font-bold text-gray-600 uppercase">{{ $info['label'] }}</p>
-                                </div>
-                                <p class="text-sm font-semibold text-gray-900 pl-11">{{ $info['value'] }}</p>
-                            </div>
-                            @endforeach
-                        </div>
+                    <div>
+                        <h6 class="fw-bold mb-1 text-white">Besoin de modifier vos informations ?</h6>
+                        <p class="text-white-50 mb-0">
+                            Pour toute modification de vos informations personnelles, veuillez contacter l'administration
+                            via la <a href="{{ route('messages.index') }}" class="help-link">messagerie</a>.
+                        </p>
                     </div>
                 </div>
-
-                <!-- Notes Récentes -->
-                @if($stagiaire->notes->count() > 0)
-                <div class="bg-white/90 backdrop-blur-xl rounded-3xl shadow-xl border border-white/20 overflow-hidden">
-                    <div class="bg-gradient-to-r from-green-600 to-emerald-600 p-5">
-                        <h3 class="text-lg font-bold text-white flex items-center gap-2">
-                            <i class="fas fa-clipboard-list"></i>
-                            Notes Récentes
-                        </h3>
-                    </div>
-                    <div class="p-6">
-                        <div class="overflow-hidden rounded-xl border border-gray-200">
-                            <table class="min-w-full divide-y divide-gray-200">
-                                <thead class="bg-gradient-to-r from-gray-50 to-gray-100">
-                                    <tr>
-                                        <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Matière</th>
-                                        <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Note</th>
-                                        <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Date</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-gray-200 bg-white">
-                                    @foreach($stagiaire->notes->take(5) as $note)
-                                    <tr class="hover:bg-gray-50 transition-colors">
-                                        <td class="px-4 py-3 text-sm font-medium text-gray-900">{{ $note->matiere->nom ?? 'N/A' }}</td>
-                                        <td class="px-4 py-3">
-                                            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold {{ $note->note >= 10 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
-                                                {{ number_format($note->note, 2) }}/20
-                                            </span>
-                                        </td>
-                                        <td class="px-4 py-3 text-sm text-gray-600">{{ $note->created_at->format('d/m/Y') }}</td>
-                                    </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-                @endif
-
-                <!-- Absences Récentes -->
-                @if($stagiaire->absences->count() > 0)
-                <div class="bg-white/90 backdrop-blur-xl rounded-3xl shadow-xl border border-white/20 overflow-hidden">
-                    <div class="bg-gradient-to-r from-red-600 to-rose-600 p-5">
-                        <h3 class="text-lg font-bold text-white flex items-center gap-2">
-                            <i class="fas fa-calendar-times"></i>
-                            Absences Récentes
-                        </h3>
-                    </div>
-                    <div class="p-6">
-                        <div class="overflow-hidden rounded-xl border border-gray-200">
-                            <table class="min-w-full divide-y divide-gray-200">
-                                <thead class="bg-gradient-to-r from-gray-50 to-gray-100">
-                                    <tr>
-                                        <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Date</th>
-                                        <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Matière</th>
-                                        <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Statut</th>
-                                        <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Motif</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-gray-200 bg-white">
-                                    @foreach($stagiaire->absences->take(5) as $absence)
-                                    <tr class="hover:bg-gray-50 transition-colors">
-                                        <td class="px-4 py-3 text-sm font-medium text-gray-900">{{ $absence->date->format('d/m/Y') }}</td>
-                                        <td class="px-4 py-3 text-sm text-gray-900">{{ $absence->matiere->nom ?? 'N/A' }}</td>
-                                        <td class="px-4 py-3">
-                                            @if($absence->justifiee)
-                                                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800">
-                                                    <i class="fas fa-check-circle mr-1"></i> Justifiée
-                                                </span>
-                                            @else
-                                                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800">
-                                                    <i class="fas fa-times-circle mr-1"></i> Non justifiée
-                                                </span>
-                                            @endif
-                                        </td>
-                                        <td class="px-4 py-3 text-sm text-gray-600">{{ $absence->motif ?? '-' }}</td>
-                                    </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-                @endif
-
-                <!-- Informations Système -->
-                <div class="bg-white/90 backdrop-blur-xl rounded-3xl shadow-xl border border-white/20 overflow-hidden">
-                    <div class="bg-gradient-to-r from-gray-700 to-slate-800 p-5">
-                        <h3 class="text-lg font-bold text-white flex items-center gap-2">
-                            <i class="fas fa-cog"></i>
-                            Informations Système
-                        </h3>
-                    </div>
-                    <div class="p-6">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            @php
-                                $system_info = [
-                                    ['label' => 'Créé le', 'value' => $stagiaire->created_at->format('d/m/Y H:i'), 'icon' => 'fa-clock'],
-                                    ['label' => 'Créé par', 'value' => $stagiaire->createdBy->name ?? 'N/A', 'icon' => 'fa-user-shield'],
-                                    ['label' => 'Modifié le', 'value' => $stagiaire->updated_at->format('d/m/Y H:i'), 'icon' => 'fa-edit'],
-                                    ['label' => 'Compte actif', 'value' => $stagiaire->is_active ? '✅ Oui' : '❌ Non', 'icon' => 'fa-toggle-on'],
-                                ];
-                            @endphp
-                            
-                            @foreach($system_info as $info)
-                            <div class="p-4 rounded-xl bg-gray-50 border border-gray-200">
-                                <div class="flex items-center gap-2 mb-2">
-                                    <i class="fas {{ $info['icon'] }} text-gray-600"></i>
-                                    <p class="text-xs font-bold text-gray-600 uppercase">{{ $info['label'] }}</p>
-                                </div>
-                                <p class="text-sm font-semibold text-gray-900">{{ $info['value'] }}</p>
-                            </div>
-                            @endforeach
-                        </div>
-                    </div>
-                </div>
-
             </div>
         </div>
     </div>
 </div>
+
+@push('styles')
+<style>
+.profile-page {
+    font-family: 'Figtree', 'Segoe UI', sans-serif;
+    animation: profileFadeIn .45s ease both;
+}
+
+@keyframes profileFadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .profile-page { animation: none; }
+}
+
+.text-pink   { color: #ec4899; }
+.text-indigo { color: #4f46e5; }
+.min-w-0     { min-width: 0; }
+
+/* ===== Bandeau de couverture ===== */
+.profile-cover {
+    background: linear-gradient(120deg, #3730a3 0%, #5b21b6 50%, #7e22ce 100%);
+    min-height: 210px;
+    overflow: hidden;
+    box-shadow: 0 20px 40px -14px rgba(76, 29, 149, 0.4);
+}
+.profile-cover-pattern {
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(rgba(255,255,255,0.12) 1px, transparent 1px);
+    background-size: 22px 22px;
+}
+.profile-cover-glow {
+    position: absolute;
+    top: -70px;
+    right: -70px;
+    width: 280px;
+    height: 280px;
+    background: radial-gradient(circle, rgba(255,255,255,0.22), transparent 70%);
+    border-radius: 50%;
+}
+.profile-cover-ring {
+    position: absolute;
+    bottom: -90px;
+    left: -40px;
+    width: 220px;
+    height: 220px;
+    border: 2px solid rgba(255,255,255,0.12);
+    border-radius: 50%;
+}
+
+.avatar-wrap { position: relative; }
+.profile-avatar {
+    width: 132px;
+    height: 132px;
+    object-fit: cover;
+    border: 5px solid #fff;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+}
+.avatar-status {
+    position: absolute;
+    bottom: 6px;
+    right: 6px;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: #22c55e;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    border: 3px solid #fff;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+}
+
+.badge-glass {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(255,255,255,0.16);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.32);
+    color: #fff;
+    padding: 5px 14px;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.cover-subline {
+    color: rgba(255,255,255,0.72);
+    font-size: 0.92rem;
+}
+.dot-sep {
+    display: inline-block;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.5);
+    margin: 0 10px;
+    vertical-align: middle;
+}
+
+/* ===== Chips statistiques ===== */
+.quick-stat {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #fff;
+    border: 1px solid #f1f0f7;
+    border-radius: 16px;
+    padding: 16px;
+    height: 100%;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 8px 18px -14px rgba(76, 29, 149, 0.18);
+    transition: transform .18s ease, box-shadow .18s ease;
+}
+.quick-stat:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 14px 26px -12px rgba(76, 29, 149, 0.22);
+}
+.quick-stat-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    flex-shrink: 0;
+}
+
+/* ===== Cartes ===== */
+.profile-card {
+    border: 1px solid #f1f0f7;
+    border-radius: 16px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 10px 22px -16px rgba(76, 29, 149, 0.16);
+    overflow: hidden;
+}
+.profile-card .card-header {
+    background: #fff;
+    border-bottom: 1px solid #f1f0f7;
+    padding: 16px 20px;
+}
+.profile-card .card-body {
+    padding: 20px;
+}
+
+.header-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+    margin-right: 8px;
+    font-size: 13px;
+    vertical-align: middle;
+}
+
+/* ===== Lignes d'information ===== */
+.info-line {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding-bottom: 16px;
+    margin-bottom: 16px;
+    border-bottom: 1px dashed #eef0f4;
+}
+.info-line.is-last {
+    padding-bottom: 0;
+    margin-bottom: 0;
+    border-bottom: none;
+}
+.info-line-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 14px;
+}
+
+.badge-soft {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+/* ===== Palette d'icônes ===== */
+.icon-indigo  { background: #eef2ff; color: #4f46e5; }
+.icon-cyan    { background: #ecfeff; color: #0891b2; }
+.icon-amber   { background: #fffbeb; color: #d97706; }
+.icon-emerald { background: #ecfdf5; color: #059669; }
+.icon-rose    { background: #fff1f2; color: #e11d48; }
+
+/* ===== Bandeau d'aide ===== */
+.help-banner {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    border-radius: 16px;
+    padding: 22px 24px;
+    box-shadow: 0 10px 25px -15px rgba(15, 23, 42, 0.4);
+}
+.help-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.12);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+}
+.help-link {
+    color: #fff;
+    text-decoration: underline;
+    text-decoration-color: rgba(255,255,255,0.4);
+    text-underline-offset: 2px;
+}
+.help-link:hover { text-decoration-color: #fff; }
+
+/* ===== Focus visible (accessibilité) ===== */
+.help-link:focus-visible,
+a:focus-visible {
+    outline: 2px solid #a5b4fc;
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 767.98px) {
+    .profile-avatar { width: 108px; height: 108px; }
+    .profile-cover { min-height: 190px; }
+}
+</style>
+@endpush
 @endsection

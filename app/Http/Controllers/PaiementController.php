@@ -22,6 +22,13 @@ class PaiementController extends Controller
     public function __construct()
     {
         $this->middleware('auth');
+        // ✅ MODIFIÉ - Accès admin ET comptable
+        $this->middleware(function ($request, $next) {
+            if (!auth()->user()->hasFinancialAccess()) {
+                abort(403, 'Accès réservé aux comptables et administrateurs');
+            }
+            return $next($request);
+        });
     }
 
     /**
@@ -29,8 +36,6 @@ class PaiementController extends Controller
      */
     public function index(Request $request)
     {
-        $this->authorize('viewAny', Paiement::class);
-
         $q = Paiement::with(['stagiaire.filiere', 'echeanciers'])
             ->when($request->filled('search'), function ($qq) use ($request) {
                 $s = $request->string('search');
@@ -50,13 +55,15 @@ class PaiementController extends Controller
 
         $paiements = $q->paginate(20);
 
+        $stats = [
+            'total_paiements' => Paiement::where('statut', 'valide')->sum('montant'),
+            'en_attente'      => Paiement::where('statut', 'en_attente')->count(),
+            'refuses'         => Paiement::where('statut', 'refuse')->count(),
+        ];
+
         return view('paiements.index', [
             'paiements' => $paiements,
-            'stats' => [
-                'total_paiements' => Paiement::where('statut', 'valide')->sum('montant'),
-                'en_attente'      => Paiement::where('statut', 'en_attente')->count(),
-                'refuses'         => Paiement::where('statut', 'refuse')->count(),
-            ],
+            'stats' => $stats,
         ]);
     }
 
@@ -65,10 +72,8 @@ class PaiementController extends Controller
      */
     public function create(Request $request)
     {
-        $this->authorize('create', Paiement::class);
-
         $stagiaire = $request->filled('stagiaire_id')
-            ? Stagiaire::with('echeanciersImpayes')->findOrFail($request->stagiaire_id)
+            ? Stagiaire::with('echeanciers')->findOrFail($request->stagiaire_id)
             : null;
 
         $stagiaires = Stagiaire::actifs()->with('filiere')->orderBy('nom')->get();
@@ -82,8 +87,6 @@ class PaiementController extends Controller
      */
     public function store(Request $request)
     {
-        $this->authorize('create', Paiement::class);
-
         $validated = $request->validate([
             'stagiaire_id'     => ['required', 'exists:stagiaires,id'],
             'montant'          => ['required', 'numeric', 'min:0.01'],
@@ -157,7 +160,6 @@ class PaiementController extends Controller
      */
     public function show(Paiement $paiement)
     {
-        $this->authorize('view', $paiement);
         $paiement->load(['stagiaire.filiere', 'echeanciers' => fn($q) => $q->orderBy('date_echeance')]);
         return view('paiements.show', compact('paiement'));
     }
@@ -167,8 +169,6 @@ class PaiementController extends Controller
      */
     public function valider(Request $request, Paiement $paiement)
     {
-        $this->authorize('update', $paiement);
-
         if ($paiement->statut === 'valide') {
             return back()->with('info', 'Ce paiement est déjà validé.');
         }
@@ -199,8 +199,6 @@ class PaiementController extends Controller
      */
     public function refuser(Request $request, Paiement $paiement)
     {
-        $this->authorize('update', $paiement);
-
         $data = $request->validate([
             'motif_refus' => ['required', 'string', 'max:1000'],
         ]);
@@ -222,12 +220,10 @@ class PaiementController extends Controller
     }
 
     /**
-     * ✅ CORRECTION: Reçu PDF - Nom unifié
+     * Reçu PDF
      */
     public function telechargerRecu(Paiement $paiement)
     {
-        $this->authorize('view', $paiement);
-
         if ($paiement->statut !== 'valide') {
             return back()->with('error', 'Le reçu n\'est disponible que pour les paiements validés.');
         }
@@ -267,12 +263,10 @@ class PaiementController extends Controller
     }
 
     /**
-     * Historique des paiements d'un stagiaire (admin)
+     * Historique des paiements d'un stagiaire (admin/comptable)
      */
     public function historique(Stagiaire $stagiaire)
     {
-        $this->authorize('viewAny', Paiement::class);
-
         $paiements = $stagiaire->paiements()
             ->with('echeanciers')
             ->latest('date_paiement')

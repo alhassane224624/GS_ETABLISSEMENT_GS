@@ -7,11 +7,22 @@ use App\Models\Stagiaire;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
+// ============================================================================
+// REMISE CONTROLLER
+// ============================================================================
+
 class RemiseController extends Controller
 {
     public function __construct()
     {
-        $this->middleware('admin');
+        $this->middleware('auth');
+        // ✅ MODIFIÉ - Accès admin ET comptable
+        $this->middleware(function ($request, $next) {
+            if (!auth()->user()->hasFinancialAccess()) {
+                abort(403, 'Accès réservé aux comptables et administrateurs');
+            }
+            return $next($request);
+        });
     }
 
     /**
@@ -174,3 +185,4 @@ class RemiseController extends Controller
             ->with('success', "Remise {$status} avec succès.");
     }
 }
+

@@ -63,15 +63,19 @@
                             <label class="text-muted small mb-1">Rôle</label>
                             <p class="mb-0">
                                 @if($user->role === 'administrateur')
-                                    <span class="badge bg-danger">
+                                    <span class="badge bg-danger fs-6">
                                         <i class="fas fa-user-shield"></i> Administrateur
                                     </span>
+                                @elseif($user->role === 'comptable')
+                                    <span class="badge bg-warning text-dark fs-6">
+                                        <i class="fas fa-calculator"></i> Comptable
+                                    </span>
                                 @elseif($user->role === 'professeur')
-                                    <span class="badge bg-info">
+                                    <span class="badge bg-info fs-6">
                                         <i class="fas fa-chalkboard-teacher"></i> Professeur
                                     </span>
                                 @else
-                                    <span class="badge bg-success">
+                                    <span class="badge bg-success fs-6">
                                         <i class="fas fa-user-graduate"></i> Stagiaire
                                     </span>
                                 @endif
@@ -81,11 +85,11 @@
                             <label class="text-muted small mb-1">Statut</label>
                             <p class="mb-0">
                                 @if($user->is_active)
-                                    <span class="badge bg-success">
+                                    <span class="badge bg-success fs-6">
                                         <i class="fas fa-check-circle"></i> Actif
                                     </span>
                                 @else
-                                    <span class="badge bg-secondary">
+                                    <span class="badge bg-secondary fs-6">
                                         <i class="fas fa-times-circle"></i> Inactif
                                     </span>
                                 @endif
@@ -226,6 +230,21 @@
                             </div>
                         </div>
                         @endif
+
+                        @if($user->role === 'comptable')
+                        <div class="col-md-6 mb-3">
+                            <div class="border rounded p-3 bg-warning bg-opacity-10">
+                                <h3 class="text-warning mb-0">{{ $stats['paiements_valides'] ?? 0 }}</h3>
+                                <small class="text-muted">Paiements validés</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="border rounded p-3 bg-success bg-opacity-10">
+                                <h3 class="text-success mb-0">{{ number_format($stats['montant_valide'] ?? 0, 2) }} DH</h3>
+                                <small class="text-muted">Montant total validé</small>
+                            </div>
+                        </div>
+                        @endif
                     </div>
                 </div>
             </div>
@@ -311,18 +330,18 @@
                         <a href="{{ route('users.edit', $user) }}" class="btn btn-warning">
                             <i class="fas fa-edit"></i> Modifier l'utilisateur
                         </a>
-<form action="{{ route('users.toggle-active', $user->id) }}" method="POST" class="d-inline">
-    @csrf
-    <button type="submit" 
-            class="btn w-100 {{ $user->is_active ? 'btn-secondary' : 'btn-success' }}"
-            onclick="return confirm('{{ $user->is_active ? 'Êtes-vous sûr de vouloir désactiver cet utilisateur ?' : 'Voulez-vous activer cet utilisateur ?' }}')">
-        <i class="fas {{ $user->is_active ? 'fa-times-circle' : 'fa-check-circle' }}"></i>
-        {{ $user->is_active ? 'Désactiver' : 'Activer' }}
-    </button>
-</form>
-
 
                         @if($user->id !== auth()->id())
+                        <form action="{{ route('users.toggle-active', $user->id) }}" method="POST" class="d-inline">
+                            @csrf
+                            <button type="submit" 
+                                    class="btn w-100 {{ $user->is_active ? 'btn-secondary' : 'btn-success' }}"
+                                    onclick="return confirm('{{ $user->is_active ? 'Êtes-vous sûr de vouloir désactiver cet utilisateur ?' : 'Voulez-vous activer cet utilisateur ?' }}')">
+                                <i class="fas {{ $user->is_active ? 'fa-ban' : 'fa-check-circle' }}"></i>
+                                {{ $user->is_active ? 'Désactiver' : 'Activer' }}
+                            </button>
+                        </form>
+
                         <form action="{{ route('users.destroy', $user) }}" method="POST" class="d-inline">
                             @csrf
                             @method('DELETE')
@@ -368,7 +387,10 @@
 
 .badge {
     padding: 0.5em 0.8em;
-    font-size: 0.85rem;
+}
+
+.fs-6 {
+    font-size: 0.95rem;
 }
 </style>
 @endsection

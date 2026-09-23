@@ -5,9 +5,9 @@
     <div class="row mb-4">
         <div class="col-md-12">
             <div class="d-flex justify-content-between align-items-center">
-                <h2><i class="fas fa-users"></i> Gestion des stagiaires</h2>
+                <h2><i class="fas fa-users"></i> Gestion des Utilisateurs</h2>
                 <a href="{{ route('users.create') }}" class="btn btn-primary">
-                    <i class="fas fa-plus"></i> Nouvel stagiaire
+                    <i class="fas fa-plus"></i> Nouvel Utilisateur
                 </a>
             </div>
         </div>
@@ -15,35 +15,57 @@
 
     <!-- Statistiques -->
     <div class="row mb-4">
-        <div class="col-md-3">
+        <div class="col-md-2">
             <div class="card bg-primary text-white">
                 <div class="card-body">
-                    <h6>Total Stagiaires</h6>
-                    <h3>{{ $stats['total_users'] }}</h3>
+                    <h6 class="mb-1">Total</h6>
+                    <h3 class="mb-0">{{ $stats['total_users'] }}</h3>
+                    <small>Utilisateurs</small>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card bg-success text-white">
+        <div class="col-md-2">
+            <div class="card bg-danger text-white">
                 <div class="card-body">
-                    <h6>Administrateurs</h6>
-                    <h3>{{ $stats['admins'] }}</h3>
+                    <h6 class="mb-1">Administrateurs</h6>
+                    <h3 class="mb-0">{{ $stats['admins'] }}</h3>
+                    <small><i class="fas fa-user-shield"></i></small>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card bg-info text-white">
-                <div class="card-body">
-                    <h6>Professeurs</h6>
-                    <h3>{{ $stats['professeurs'] }}</h3>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
             <div class="card bg-warning text-white">
                 <div class="card-body">
-                    <h6>Stagiaires Actifs</h6>
-                    <h3>{{ $stats['actifs'] }}</h3>
+                    <h6 class="mb-1">Comptables</h6>
+                    <h3 class="mb-0">{{ $stats['comptables'] }}</h3>
+                    <small><i class="fas fa-calculator"></i></small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h6 class="mb-1">Professeurs</h6>
+                    <h3 class="mb-0">{{ $stats['professeurs'] }}</h3>
+                    <small><i class="fas fa-chalkboard-teacher"></i></small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-secondary text-white">
+                <div class="card-body">
+                    <h6 class="mb-1">Stagiaires</h6>
+                    <h3 class="mb-0">{{ $stats['stagiaires'] }}</h3>
+                    <small><i class="fas fa-user-graduate"></i></small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h6 class="mb-1">Actifs</h6>
+                    <h3 class="mb-0">{{ $stats['actifs'] }}</h3>
+                    <small><i class="fas fa-check-circle"></i></small>
                 </div>
             </div>
         </div>
@@ -61,6 +83,7 @@
                         <select name="role" class="form-control">
                             <option value="">Tous les rôles</option>
                             <option value="administrateur" {{ request('role') == 'administrateur' ? 'selected' : '' }}>Administrateur</option>
+                            <option value="comptable" {{ request('role') == 'comptable' ? 'selected' : '' }}>Comptable</option>
                             <option value="professeur" {{ request('role') == 'professeur' ? 'selected' : '' }}>Professeur</option>
                             <option value="stagiaire" {{ request('role') == 'stagiaire' ? 'selected' : '' }}>Stagiaire</option>
                         </select>
@@ -73,7 +96,7 @@
                         </select>
                     </div>
                     <div class="col-md-2">
-                        <button type="submit" class="btn btn-primary btn-block">
+                        <button type="submit" class="btn btn-primary w-100">
                             <i class="fas fa-search"></i> Filtrer
                         </button>
                     </div>
@@ -85,15 +108,15 @@
     <!-- Messages -->
     @if(session('success'))
         <div class="alert alert-success alert-dismissible fade show">
-            {{ session('success') }}
-            <button type="button" class="close" data-dismiss="alert">&times;</button>
+            <i class="fas fa-check-circle me-2"></i>{{ session('success') }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
     @endif
 
     @if(session('error'))
         <div class="alert alert-danger alert-dismissible fade show">
-            {{ session('error') }}
-            <button type="button" class="close" data-dismiss="alert">&times;</button>
+            <i class="fas fa-exclamation-circle me-2"></i>{{ session('error') }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
     @endif
 
@@ -123,18 +146,32 @@
                                 <td>{{ $user->email }}</td>
                                 <td>
                                     @if($user->role == 'administrateur')
-                                        <span class="badge badge-danger">Administrateur</span>
+                                        <span class="badge bg-danger">
+                                            <i class="fas fa-user-shield"></i> Administrateur
+                                        </span>
+                                    @elseif($user->role == 'comptable')
+                                        <span class="badge bg-warning text-dark">
+                                            <i class="fas fa-calculator"></i> Comptable
+                                        </span>
                                     @elseif($user->role == 'professeur')
-                                        <span class="badge badge-info">Professeur</span>
+                                        <span class="badge bg-info">
+                                            <i class="fas fa-chalkboard-teacher"></i> Professeur
+                                        </span>
                                     @else
-                                        <span class="badge badge-secondary">Stagiaires</span>
+                                        <span class="badge bg-secondary">
+                                            <i class="fas fa-user-graduate"></i> Stagiaire
+                                        </span>
                                     @endif
                                 </td>
                                 <td>
                                     @if($user->is_active)
-                                        <span class="badge badge-success">Actif</span>
+                                        <span class="badge bg-success">
+                                            <i class="fas fa-check-circle"></i> Actif
+                                        </span>
                                     @else
-                                        <span class="badge badge-danger">Inactif</span>
+                                        <span class="badge bg-danger">
+                                            <i class="fas fa-times-circle"></i> Inactif
+                                        </span>
                                     @endif
                                 </td>
                                 <td>{{ $user->specialite ?? '-' }}</td>
@@ -149,12 +186,12 @@
                                             <i class="fas fa-edit"></i>
                                         </a>
                                         @if($user->id != auth()->id())
-                                           <form action="{{ route('users.toggle-active', $user->id) }}" method="POST">
-    @csrf
-    <button type="submit" class="btn btn-sm btn-warning">
-        {{ $user->is_active ? 'Désactiver' : 'Activer' }}
-    </button>
-</form>
+                                            <form action="{{ route('users.toggle-active', $user->id) }}" method="POST" class="d-inline">
+                                                @csrf
+                                                <button type="submit" class="btn btn-sm {{ $user->is_active ? 'btn-secondary' : 'btn-success' }}" title="{{ $user->is_active ? 'Désactiver' : 'Activer' }}">
+                                                    <i class="fas {{ $user->is_active ? 'fa-ban' : 'fa-check' }}"></i>
+                                                </button>
+                                            </form>
 
                                             <button type="button" class="btn btn-sm btn-danger" onclick="deleteUser({{ $user->id }})" title="Supprimer">
                                                 <i class="fas fa-trash"></i>
@@ -165,7 +202,10 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="8" class="text-center">Aucun stagiaire trouvé</td>
+                                <td colspan="8" class="text-center py-4">
+                                    <i class="fas fa-users-slash fa-3x text-muted mb-3"></i>
+                                    <p class="text-muted mb-0">Aucun utilisateur trouvé</p>
+                                </td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -181,7 +221,7 @@
 
 <script>
 function deleteUser(userId) {
-    if(confirm('Êtes-vous sûr de vouloir supprimer cet stagiaire ?')) {
+    if(confirm('Êtes-vous sûr de vouloir supprimer cet utilisateur ?')) {
         fetch(`/users/${userId}`, {
             method: 'DELETE',
             headers: {
@@ -193,7 +233,13 @@ function deleteUser(userId) {
         .then(data => {
             if(data.success) {
                 location.reload();
+            } else {
+                alert('Erreur lors de la suppression');
             }
+        })
+        .catch(error => {
+            console.error('Erreur:', error);
+            alert('Une erreur est survenue');
         });
     }
 }

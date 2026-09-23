@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends(auth()->user()->role === 'comptable' ? 'layouts.comptable' : 'layouts.app')
 
 @section('title', 'Modifier un Échéancier')
 

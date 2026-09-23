@@ -39,7 +39,7 @@
     <div class="row g-4 mb-4">
         <!-- Mes Filières -->
         <div class="col-md-6 col-lg-3">
-            <div class="card border-0 shadow-sm h-100 hover-card animate__animated animate__fadeInUp" style="animation-delay: 0.1s">
+            <a href="#mes-filieres" class="card stat-card-link border-0 shadow-sm h-100 hover-card animate__animated animate__fadeInUp" style="animation-delay: 0.1s">
                 <div class="card-body">
                     <div class="d-flex align-items-center">
                         <div class="flex-shrink-0">
@@ -51,19 +51,21 @@
                             <p class="text-muted mb-1 small fw-semibold">Mes Filières</p>
                             <h2 class="mb-0 fw-bold counter">{{ $data['filieres']->count() }}</h2>
                             @if($data['filieres']->count() > 0)
-                                <small class="text-success">
+                                <span class="stat-card-cta text-success">
                                     <i class="fas fa-check-circle me-1"></i>Actif
-                                </small>
+                                </span>
+                            @else
+                                <span class="stat-card-cta text-muted">Voir le détail <i class="fas fa-arrow-right ms-1"></i></span>
                             @endif
                         </div>
                     </div>
                 </div>
-            </div>
+            </a>
         </div>
 
         <!-- Mes Stagiaires -->
         <div class="col-md-6 col-lg-3">
-            <div class="card border-0 shadow-sm h-100 hover-card animate__animated animate__fadeInUp" style="animation-delay: 0.2s">
+            <a href="{{ route('professeur.stagiaires') }}" class="card stat-card-link border-0 shadow-sm h-100 hover-card animate__animated animate__fadeInUp" style="animation-delay: 0.2s">
                 <div class="card-body">
                     <div class="d-flex align-items-center">
                         <div class="flex-shrink-0">
@@ -74,18 +76,18 @@
                         <div class="flex-grow-1 ms-3">
                             <p class="text-muted mb-1 small fw-semibold">Mes Stagiaires</p>
                             <h2 class="mb-0 fw-bold counter">{{ $data['total_stagiaires'] }}</h2>
-                            <a href="{{ route('professeur.stagiaires') }}" class="small text-decoration-none text-success">
+                            <span class="stat-card-cta text-success">
                                 Voir tous <i class="fas fa-arrow-right ms-1"></i>
-                            </a>
+                            </span>
                         </div>
                     </div>
                 </div>
-            </div>
+            </a>
         </div>
 
         <!-- Notes Saisies -->
         <div class="col-md-6 col-lg-3">
-            <div class="card border-0 shadow-sm h-100 hover-card animate__animated animate__fadeInUp" style="animation-delay: 0.3s">
+            <a href="{{ route('professeur.notes-par-matiere') }}" class="card stat-card-link border-0 shadow-sm h-100 hover-card animate__animated animate__fadeInUp" style="animation-delay: 0.3s">
                 <div class="card-body">
                     <div class="d-flex align-items-center">
                         <div class="flex-shrink-0">
@@ -96,18 +98,18 @@
                         <div class="flex-grow-1 ms-3">
                             <p class="text-muted mb-1 small fw-semibold">Notes Saisies</p>
                             <h2 class="mb-0 fw-bold counter">{{ $data['total_notes'] }}</h2>
-                            <a href="{{ route('professeur.notes-par-matiere') }}" class="small text-decoration-none text-warning">
+                            <span class="stat-card-cta text-warning">
                                 Consulter <i class="fas fa-arrow-right ms-1"></i>
-                            </a>
+                            </span>
                         </div>
                     </div>
                 </div>
-            </div>
+            </a>
         </div>
 
         <!-- Absences ce mois -->
         <div class="col-md-6 col-lg-3">
-            <div class="card border-0 shadow-sm h-100 hover-card animate__animated animate__fadeInUp" style="animation-delay: 0.4s">
+            <a href="{{ route('professeur.presences') }}" class="card stat-card-link border-0 shadow-sm h-100 hover-card animate__animated animate__fadeInUp" style="animation-delay: 0.4s">
                 <div class="card-body">
                     <div class="d-flex align-items-center">
                         <div class="flex-shrink-0">
@@ -118,13 +120,13 @@
                         <div class="flex-grow-1 ms-3">
                             <p class="text-muted mb-1 small fw-semibold">Absences (30j)</p>
                             <h2 class="mb-0 fw-bold counter">{{ $data['total_absences'] }}</h2>
-                            <a href="{{ route('professeur.presences') }}" class="small text-decoration-none text-danger">
+                            <span class="stat-card-cta text-danger">
                                 Gérer <i class="fas fa-arrow-right ms-1"></i>
-                            </a>
+                            </span>
                         </div>
                     </div>
                 </div>
-            </div>
+            </a>
         </div>
     </div>
 
@@ -228,7 +230,7 @@
     <div class="row g-4 mb-4">
         <!-- Mes Filières détails -->
         <div class="col-lg-6">
-            <div class="card border-0 shadow-sm h-100 animate__animated animate__fadeInUp">
+            <div class="card border-0 shadow-sm h-100 animate__animated animate__fadeInUp" id="mes-filieres">
                 <div class="card-header bg-gradient-light border-0 py-3">
                     <h5 class="mb-0 fw-bold">
                         <i class="fas fa-graduation-cap text-purple me-2"></i>
@@ -452,6 +454,27 @@
 
 .bg-danger-gradient {
     background: linear-gradient(135deg, #ef4444 0%, #f87171 100%);
+}
+
+/* Cartes de statistiques cliquables */
+.stat-card-link {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    cursor: pointer;
+}
+.stat-card-link:hover,
+.stat-card-link:focus {
+    color: inherit;
+    text-decoration: none;
+}
+.stat-card-link:focus-visible {
+    outline: 2px solid #667eea;
+    outline-offset: 3px;
+}
+.stat-card-cta {
+    font-size: 0.85rem;
+    font-weight: 600;
 }
 
 /* Animations au survol */

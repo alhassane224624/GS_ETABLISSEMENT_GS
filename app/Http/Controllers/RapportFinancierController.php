@@ -4,8 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Paiement;
 use App\Models\Echeancier;
-use App\Models\Remise;
 use App\Models\Filiere;
+use App\Models\Remise;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
@@ -14,7 +14,8 @@ class RapportFinancierController extends Controller
 {
     public function __construct()
     {
-        $this->middleware('admin');
+        $this->middleware('auth');
+        $this->middleware('financial');
     }
 
     /**
@@ -205,10 +206,8 @@ class RapportFinancierController extends Controller
      */
     private function exporterExcel($stats, $paiements, $echeanciers, $dateDebut, $dateFin)
     {
-        return \Maatwebsite\Excel\Facades\Excel::download(
-            new \App\Exports\RapportFinancierExport($stats, $paiements, $echeanciers),
-            'rapport_financier_' . now()->format('Y-m-d') . '.xlsx'
-        );
+        // TODO: Implémenter avec Maatwebsite Excel
+        return response()->json(['message' => 'Export Excel à implémenter']);
     }
 
     /**
@@ -216,15 +215,8 @@ class RapportFinancierController extends Controller
      */
     private function exporterPdf($stats, $paiements, $echeanciers, $dateDebut, $dateFin)
     {
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('admin.rapports.financier-pdf', [
-            'stats' => $stats,
-            'paiements' => $paiements,
-            'echeanciers' => $echeanciers,
-            'dateDebut' => $dateDebut,
-            'dateFin' => $dateFin,
-        ])->setPaper('a4', 'landscape');
-
-        return $pdf->download('rapport_financier_' . now()->format('Y-m-d') . '.pdf');
+        // TODO: Implémenter avec DomPDF
+        return response()->json(['message' => 'Export PDF à implémenter']);
     }
 
     /**
@@ -232,7 +224,7 @@ class RapportFinancierController extends Controller
      */
     public function donneesGraphique(Request $request)
     {
-        $periode = $request->input('periode', 30); // jours
+        $periode = $request->input('periode', 30);
         $type = $request->input('type', 'evolution');
 
         if ($type === 'evolution') {
@@ -246,9 +238,6 @@ class RapportFinancierController extends Controller
         return response()->json(['error' => 'Type invalide'], 400);
     }
 
-    /**
-     * Données d'évolution des paiements
-     */
     private function evolutionPaiements($jours)
     {
         $labels = [];
@@ -262,24 +251,9 @@ class RapportFinancierController extends Controller
                 ->sum('montant');
         }
 
-        return [
-            'labels' => $labels,
-            'datasets' => [
-                [
-                    'label' => 'Paiements reçus',
-                    'data' => $data,
-                    'borderColor' => 'rgb(75, 192, 192)',
-                    'backgroundColor' => 'rgba(75, 192, 192, 0.1)',
-                    'tension' => 0.4,
-                    'fill' => true
-                ]
-            ]
-        ];
+        return ['labels' => $labels, 'datasets' => [['label' => 'Paiements reçus', 'data' => $data]]];
     }
 
-    /**
-     * Répartition par méthodes
-     */
     private function repartitionMethodes($jours)
     {
         $data = Paiement::where('statut', 'valide')
@@ -288,26 +262,9 @@ class RapportFinancierController extends Controller
             ->groupBy('methode_paiement')
             ->get();
 
-        return [
-            'labels' => $data->pluck('methode_paiement')->toArray(),
-            'datasets' => [
-                [
-                    'data' => $data->pluck('total')->toArray(),
-                    'backgroundColor' => [
-                        'rgba(75, 192, 192, 0.8)',
-                        'rgba(54, 162, 235, 0.8)',
-                        'rgba(255, 206, 86, 0.8)',
-                        'rgba(153, 102, 255, 0.8)',
-                        'rgba(255, 99, 132, 0.8)'
-                    ]
-                ]
-            ]
-        ];
+        return ['labels' => $data->pluck('methode_paiement')->toArray(), 'datasets' => [['data' => $data->pluck('total')->toArray()]]];
     }
 
-    /**
-     * Répartition par filières
-     */
     private function repartitionFilieres($jours)
     {
         $data = Paiement::with('stagiaire.filiere')
@@ -317,20 +274,6 @@ class RapportFinancierController extends Controller
             ->groupBy('stagiaire.filiere.nom')
             ->map(fn($group) => $group->sum('montant'));
 
-        return [
-            'labels' => $data->keys()->toArray(),
-            'datasets' => [
-                [
-                    'data' => $data->values()->toArray(),
-                    'backgroundColor' => [
-                        'rgba(255, 99, 132, 0.8)',
-                        'rgba(54, 162, 235, 0.8)',
-                        'rgba(255, 206, 86, 0.8)',
-                        'rgba(75, 192, 192, 0.8)',
-                        'rgba(153, 102, 255, 0.8)'
-                    ]
-                ]
-            ]
-        ];
+        return ['labels' => $data->keys()->toArray(), 'datasets' => [['data' => $data->values()->toArray()]]];
     }
 }

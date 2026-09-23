@@ -20,14 +20,34 @@
     --transition: all 0.3s ease;
 }
 
-/* Dark Mode */
-@media (prefers-color-scheme: dark) {
-    :root {
-        --text-primary: #e2e8f0;
-        --text-secondary: #94a3b8;
-        --bg-light: rgba(31,41,55,0.85);
-        --bg-gradient: linear-gradient(135deg, #1f2937, #374151);
-    }
+/* Dark Mode (déclenché par la classe .dark-mode sur <body>, pas par le système) */
+body.dark-mode {
+    --text-primary: #e2e8f0;
+    --text-secondary: #94a3b8;
+    --bg-light: rgba(31,41,55,0.85);
+    --bg-gradient: linear-gradient(135deg, #1f2937, #374151);
+}
+
+body.dark-mode .new-stat-card:not(.blue):not(.green):not(.yellow):not(.cyan) {
+    background: #1e293b;
+}
+
+body.dark-mode .list-item {
+    background: #1e293b;
+    border-color: #334155;
+}
+
+body.dark-mode .info-card-header {
+    background: linear-gradient(135deg, #1f2937, #111827);
+    border-bottom-color: #334155;
+}
+
+body.dark-mode .progress-bar-custom {
+    background: #334155;
+}
+
+body.dark-mode .empty-state {
+    color: var(--text-secondary);
 }
 
 /* === Base Layout === */
@@ -35,6 +55,7 @@ body {
     background: var(--bg-gradient);
     font-family: 'Poppins', sans-serif;
     color: var(--text-primary);
+    transition: background 0.3s ease, color 0.3s ease;
 }
 
 .container-fluid {
@@ -350,7 +371,7 @@ body {
 <div class="container-fluid fade-in">
     <!-- Dark Mode Toggle -->
     <button class="btn btn-outline-secondary mb-3" id="darkModeToggle" aria-label="Toggle dark mode">
-        <i class="fas fa-moon"></i> Mode Sombre
+        <i class="fas fa-moon"></i><span id="darkModeLabel"> Mode Sombre</span>
     </button>
 
     <!-- Header -->
@@ -504,14 +525,14 @@ body {
         const target = +counter.getAttribute('data-target');
         const duration = 1000; // Animation duration in ms
         const start = performance.now();
-        
+
         function updateCounter(time) {
             const elapsed = time - start;
             const progress = Math.min(elapsed / duration, 1);
             counter.textContent = Math.floor(progress * target);
             if (progress < 1) requestAnimationFrame(updateCounter);
         }
-        
+
         requestAnimationFrame(updateCounter);
     });
 
@@ -529,11 +550,22 @@ body {
 
     // Dark Mode Toggle
     const toggle = document.getElementById('darkModeToggle');
+    const toggleIcon = toggle.querySelector('i');
+    const toggleLabel = document.getElementById('darkModeLabel');
+
+    // Restaurer la préférence enregistrée
+    if (localStorage.getItem('darkMode') === 'true') {
+        document.body.classList.add('dark-mode');
+        toggleIcon.classList.replace('fa-moon', 'fa-sun');
+        toggleLabel.textContent = ' Mode Clair';
+    }
+
     toggle.addEventListener('click', () => {
-        document.body.classList.toggle('dark-mode');
-        toggle.querySelector('i').classList.toggle('fa-moon');
-        toggle.querySelector('i').classList.toggle('fa-sun');
-        toggle.textContent = document.body.classList.contains('dark-mode') ? ' Mode Clair' : ' Mode Sombre';
+        const isDark = document.body.classList.toggle('dark-mode');
+        toggleIcon.classList.toggle('fa-moon');
+        toggleIcon.classList.toggle('fa-sun');
+        toggleLabel.textContent = isDark ? ' Mode Clair' : ' Mode Sombre';
+        localStorage.setItem('darkMode', isDark);
     });
 </script>
 @endsection

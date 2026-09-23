@@ -35,45 +35,46 @@
                     <div class="col-md-6">
                         <h5 class="mb-3">Informations de base</h5>
 
-                        <div class="form-group">
+                        <div class="form-group mb-3">
                             <label for="name">Nom complet <span class="text-danger">*</span></label>
                             <input type="text" name="name" id="name" class="form-control" value="{{ old('name') }}" required>
                         </div>
 
-                        <div class="form-group">
+                        <div class="form-group mb-3">
                             <label for="email">Email <span class="text-danger">*</span></label>
                             <input type="email" name="email" id="email" class="form-control" value="{{ old('email') }}" required>
                         </div>
 
-                        <div class="form-group">
+                        <div class="form-group mb-3">
                             <label for="password">Mot de passe <span class="text-danger">*</span></label>
                             <input type="password" name="password" id="password" class="form-control" required>
                         </div>
 
-                        <div class="form-group">
+                        <div class="form-group mb-3">
                             <label for="password_confirmation">Confirmer le mot de passe <span class="text-danger">*</span></label>
                             <input type="password" name="password_confirmation" id="password_confirmation" class="form-control" required>
                         </div>
 
-                        <div class="form-group">
+                        <div class="form-group mb-3">
                             <label for="role">Rôle <span class="text-danger">*</span></label>
                             <select name="role" id="role" class="form-control" required>
                                 <option value="">Sélectionner un rôle</option>
                                 <option value="stagiaire" {{ old('role') == 'stagiaire' ? 'selected' : '' }}>Stagiaire</option>
                                 <option value="professeur" {{ old('role') == 'professeur' ? 'selected' : '' }}>Professeur</option>
+                                <option value="comptable" {{ old('role') == 'comptable' ? 'selected' : '' }}>💼 Comptable</option>
                                 <option value="administrateur" {{ old('role') == 'administrateur' ? 'selected' : '' }}>Administrateur</option>
                             </select>
                         </div>
 
-                        <div class="form-group">
+                        <div class="form-group mb-3">
                             <label for="telephone">Téléphone</label>
                             <input type="text" name="telephone" id="telephone" class="form-control" value="{{ old('telephone') }}">
                         </div>
 
-                        <div class="form-group">
-                            <div class="custom-control custom-checkbox">
-                                <input type="checkbox" class="custom-control-input" id="is_active" name="is_active" value="1" {{ old('is_active', true) ? 'checked' : '' }}>
-                                <label class="custom-control-label" for="is_active">Compte actif</label>
+                        <div class="form-group mb-3">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="is_active" name="is_active" value="1" {{ old('is_active', true) ? 'checked' : '' }}>
+                                <label class="form-check-label" for="is_active">Compte actif</label>
                             </div>
                         </div>
                     </div>
@@ -82,12 +83,13 @@
                     <div class="col-md-6">
                         <h5 class="mb-3">Informations complémentaires</h5>
 
-                        <div class="form-group">
+                        <div class="form-group mb-3">
                             <label for="specialite">Spécialité</label>
                             <input type="text" name="specialite" id="specialite" class="form-control" value="{{ old('specialite') }}">
+                            <small class="text-muted">Ex: Comptabilité, Gestion financière, etc.</small>
                         </div>
 
-                        <div class="form-group">
+                        <div class="form-group mb-3">
                             <label for="bio">Biographie</label>
                             <textarea name="bio" id="bio" rows="3" class="form-control">{{ old('bio') }}</textarea>
                         </div>
@@ -97,13 +99,13 @@
                             <hr>
                             <h5 class="mb-3">Attribution Professeur</h5>
 
-                            <div class="form-group">
+                            <div class="form-group mb-3">
                                 <label>Filières</label>
                                 <div class="border p-3" style="max-height: 200px; overflow-y: auto;">
                                     @foreach($filieres as $filiere)
-                                        <div class="custom-control custom-checkbox">
-                                            <input type="checkbox" class="custom-control-input" id="filiere_{{ $filiere->id }}" name="filieres[]" value="{{ $filiere->id }}">
-                                            <label class="custom-control-label" for="filiere_{{ $filiere->id }}">
+                                        <div class="form-check">
+                                            <input type="checkbox" class="form-check-input" id="filiere_{{ $filiere->id }}" name="filieres[]" value="{{ $filiere->id }}">
+                                            <label class="form-check-label" for="filiere_{{ $filiere->id }}">
                                                 {{ $filiere->nom }}
                                             </label>
                                         </div>
@@ -111,13 +113,13 @@
                                 </div>
                             </div>
 
-                            <div class="form-group">
+                            <div class="form-group mb-3">
                                 <label>Matières</label>
                                 <div class="border p-3" style="max-height: 200px; overflow-y: auto;">
                                     @foreach($matieres as $matiere)
-                                        <div class="custom-control custom-checkbox">
-                                            <input type="checkbox" class="custom-control-input" id="matiere_{{ $matiere->id }}" name="matieres[]" value="{{ $matiere->id }}">
-                                            <label class="custom-control-label" for="matiere_{{ $matiere->id }}">
+                                        <div class="form-check">
+                                            <input type="checkbox" class="form-check-input" id="matiere_{{ $matiere->id }}" name="matieres[]" value="{{ $matiere->id }}">
+                                            <label class="form-check-label" for="matiere_{{ $matiere->id }}">
                                                 {{ $matiere->nom }} ({{ $matiere->code }})
                                             </label>
                                         </div>
@@ -131,7 +133,7 @@
                             <hr>
                             <h5 class="mb-3">Informations Stagiaire</h5>
 
-                            <div class="form-group">
+                            <div class="form-group mb-3">
                                 <label for="filiere_id">Filière</label>
                                 <select name="filiere_id" id="filiere_id" class="form-control">
                                     <option value="">-- Sélectionner une filière --</option>
@@ -141,7 +143,7 @@
                                 </select>
                             </div>
 
-                            <div class="form-group">
+                            <div class="form-group mb-3">
                                 <label for="classe_id">Classe</label>
                                 <select name="classe_id" id="classe_id" class="form-control">
                                     <option value="">-- Sélectionner une classe --</option>
@@ -153,7 +155,7 @@
                                 </select>
                             </div>
 
-                            <div class="form-group">
+                            <div class="form-group mb-3">
                                 <label for="niveau_id">Niveau</label>
                                 <select name="niveau_id" id="niveau_id" class="form-control">
                                     <option value="">-- Sélectionner un niveau --</option>
@@ -166,6 +168,23 @@
                             <p class="text-muted mt-2">
                                 💡 Le stagiaire aura automatiquement un matricule et un compte utilisateur associé.
                             </p>
+                        </div>
+
+                        <!-- Section Comptable -->
+                        <div id="comptable-section" style="display: none;">
+                            <hr>
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle"></i>
+                                <strong>Rôle Comptable</strong>
+                                <p class="mb-0 mt-2">Ce compte aura accès à :</p>
+                                <ul class="mb-0 mt-2">
+                                    <li>Gestion des paiements</li>
+                                    <li>Gestion des échéanciers</li>
+                                    <li>Gestion des remises</li>
+                                    <li>Rapports financiers</li>
+                                    <li>Consultation des stagiaires (données financières)</li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -189,16 +208,27 @@
 document.getElementById('role').addEventListener('change', function() {
     const professeurSection = document.getElementById('professeur-section');
     const stagiaireSection = document.getElementById('stagiaire-section');
+    const comptableSection = document.getElementById('comptable-section');
 
-    professeurSection.style.display = (this.value === 'professeur') ? 'block' : 'none';
-    stagiaireSection.style.display = (this.value === 'stagiaire') ? 'block' : 'none';
+    professeurSection.style.display = 'none';
+    stagiaireSection.style.display = 'none';
+    comptableSection.style.display = 'none';
+
+    if (this.value === 'professeur') {
+        professeurSection.style.display = 'block';
+    } else if (this.value === 'stagiaire') {
+        stagiaireSection.style.display = 'block';
+    } else if (this.value === 'comptable') {
+        comptableSection.style.display = 'block';
+    }
 });
 
-// Affiche correctement la section au chargement (utile lors d'une erreur de validation)
+// Affiche correctement la section au chargement
 window.addEventListener('DOMContentLoaded', () => {
     const role = document.getElementById('role').value;
     if (role === 'professeur') document.getElementById('professeur-section').style.display = 'block';
     if (role === 'stagiaire') document.getElementById('stagiaire-section').style.display = 'block';
+    if (role === 'comptable') document.getElementById('comptable-section').style.display = 'block';
 });
 </script>
 @endsection

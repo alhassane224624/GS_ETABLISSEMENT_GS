@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 
-// 🔔 AJOUT : Importer les notifications
+// Notifications
 use App\Notifications\AccountActivated;
 use App\Notifications\AccountDeactivated;
 
@@ -47,6 +47,7 @@ class UserController extends Controller
         $stats = [
             'total_users' => User::count(),
             'admins' => User::where('role', 'administrateur')->count(),
+            'comptables' => User::where('role', 'comptable')->count(), // ✅ AJOUT
             'professeurs' => User::where('role', 'professeur')->count(),
             'stagiaires' => User::where('role', 'stagiaire')->count(),
             'actifs' => User::where('is_active', true)->count(),
@@ -67,9 +68,9 @@ class UserController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|email',
+            'email' => 'required|email|unique:users,email',
             'password' => 'required|string|min:8|confirmed',
-            'role' => 'required|in:stagiaire,administrateur,professeur',
+            'role' => 'required|in:stagiaire,administrateur,professeur,comptable', // ✅ AJOUT comptable
             'specialite' => 'nullable|string|max:255',
             'bio' => 'nullable|string|max:1000',
             'telephone' => 'nullable|string|max:20',
@@ -83,47 +84,45 @@ class UserController extends Controller
             'matieres.*' => 'exists:matieres,id',
         ]);
 
-        $user = User::updateOrCreate(
-            ['email' => $validated['email']],
-            [
-                'name' => $validated['name'],
-                'password' => Hash::make($validated['password']),
-                'role' => $validated['role'],
-                'specialite' => $validated['specialite'] ?? null,
-                'bio' => $validated['bio'] ?? null,
-                'telephone' => $validated['telephone'] ?? null,
-                'is_active' => $validated['is_active'] ?? true,
-                'created_by' => Auth::id(),
-            ]
-        );
+        $user = User::create([
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'password' => Hash::make($validated['password']),
+            'role' => $validated['role'],
+            'specialite' => $validated['specialite'] ?? null,
+            'bio' => $validated['bio'] ?? null,
+            'telephone' => $validated['telephone'] ?? null,
+            'is_active' => $validated['is_active'] ?? true,
+            'created_by' => Auth::id(),
+        ]);
 
+        // Si stagiaire, créer le profil
         if ($user->role === 'stagiaire') {
             $parts = preg_split('/\s+/', trim($user->name));
             $nom = $parts[0] ?? $user->name;
             $prenom = isset($parts[1]) ? implode(' ', array_slice($parts, 1)) : '';
 
-            $lastId = \App\Models\Stagiaire::max('id') + 1;
+            $lastId = Stagiaire::max('id') + 1;
             $year = now()->format('Y');
             $matricule = sprintf("ST%s%05d", $year, $lastId);
 
-            \App\Models\Stagiaire::updateOrCreate(
-                ['user_id' => $user->id],
-                [
-                    'nom' => $nom,
-                    'prenom' => $prenom,
-                    'matricule' => $matricule,
-                    'email' => $user->email,
-                    'is_active' => $user->is_active,
-                    'statut' => 'actif',
-                    'date_inscription' => now(),
-                    'filiere_id' => $request->input('filiere_id'),
-                    'classe_id' => $request->input('classe_id'),
-                    'niveau_id' => $request->input('niveau_id'),
-                    'created_by' => Auth::id(),
-                ]
-            );
+            Stagiaire::create([
+                'user_id' => $user->id,
+                'nom' => $nom,
+                'prenom' => $prenom,
+                'matricule' => $matricule,
+                'email' => $user->email,
+                'is_active' => $user->is_active,
+                'statut' => 'actif',
+                'date_inscription' => now(),
+                'filiere_id' => $request->input('filiere_id'),
+                'classe_id' => $request->input('classe_id'),
+                'niveau_id' => $request->input('niveau_id'),
+                'created_by' => Auth::id(),
+            ]);
         }
 
+        // Si professeur, assigner filières et matières
         if ($user->role === 'professeur') {
             if (!empty($validated['filieres'])) {
                 $syncFilieres = [];
@@ -153,7 +152,7 @@ class UserController extends Controller
         }
 
         return redirect()->route('users.index')
-            ->with('success', 'Utilisateur créé ou mis à jour avec succès.');
+            ->with('success', 'Utilisateur créé avec succès.');
     }
 
     public function show(User $user)
@@ -165,6 +164,14 @@ class UserController extends Controller
             'stagiaires_crees' => $user->stagiairesCreated()->count(),
             'plannings_crees' => $user->planningsCreated()->count(),
         ];
+
+        // ✅ Stats supplémentaires pour comptable
+        if ($user->isComptable()) {
+            $stats['paiements_valides'] = \App\Models\Paiement::where('valide_by', $user->id)->count();
+            $stats['montant_valide'] = \App\Models\Paiement::where('valide_by', $user->id)
+                ->where('statut', 'valide')
+                ->sum('montant');
+        }
 
         return view('users.show', compact('user', 'stats'));
     }
@@ -184,7 +191,7 @@ class UserController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email,' . $user->id,
             'password' => 'nullable|string|min:8|confirmed',
-            'role' => 'required|in:stagiaire,administrateur,professeur',
+            'role' => 'required|in:stagiaire,administrateur,professeur,comptable', // ✅ AJOUT comptable
             'specialite' => 'nullable|string|max:255',
             'bio' => 'nullable|string|max:1000',
             'telephone' => 'nullable|string|max:20',
@@ -211,6 +218,7 @@ class UserController extends Controller
 
         $user->update($updateData);
 
+        // Si professeur, mettre à jour filières et matières
         if ($user->role === 'professeur') {
             $syncFilieres = [];
             if (!empty($validated['filieres'])) {
@@ -268,7 +276,7 @@ class UserController extends Controller
             'activated_by' => $newStatus ? Auth::id() : null,
         ]);
 
-        // 🔔 NOTIFICATION : Notifier l'utilisateur selon l'action
+        // Notification : Notifier l'utilisateur selon l'action
         if ($newStatus) {
             $user->notify(new AccountActivated());
         } else {

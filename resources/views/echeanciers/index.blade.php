@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends(auth()->user()->role === 'comptable' ? 'layouts.comptable' : 'layouts.app')
 
 @section('title', 'Gestion des Échéanciers')
 
@@ -15,7 +15,7 @@
             </button>
             <ul class="dropdown-menu dropdown-menu-end">
                 <li>
-                    <a class="dropdown-item" href="{{ route('echeanciers.generer') }}">
+                    <a class="dropdown-item" href="{{ route('echeanciers.generer-mensuels') }}">
                         <i class="fas fa-calendar-alt"></i> Générer Mensuels
                     </a>
                 </li>

@@ -10,6 +10,7 @@ class Kernel extends HttpKernel
      * The application's global HTTP middleware stack.
      */
     protected $middleware = [
+         \App\Http\Middleware\CorsMiddleware::class,
         \App\Http\Middleware\TrustProxies::class,
         \Illuminate\Http\Middleware\HandleCors::class,
         \App\Http\Middleware\PreventRequestsDuringMaintenance::class,
@@ -54,8 +55,11 @@ class Kernel extends HttpKernel
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         
         // ✅ Middlewares personnalisés pour les rôles (CORRIGÉS)
+        
         'admin' => \App\Http\Middleware\Admin::class,
         'professeur' => \App\Http\Middleware\ProfesseurMiddleware::class,
         'stagiaire' => \App\Http\Middleware\StagiaireMiddleware::class,
+         'financial' => \App\Http\Middleware\FinancialMiddleware::class,
+
     ];
 }

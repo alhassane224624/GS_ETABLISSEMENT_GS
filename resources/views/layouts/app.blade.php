@@ -16,23 +16,34 @@
             --violet: #4f46e5;
             --violet-light: #6366f1;
             --gris-clair: #f8fafc;
+            --sidebar-width: 260px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
 
         body {
             font-family: 'Inter', sans-serif;
             background: var(--gris-clair);
+            overflow-x: hidden;
         }
 
         /* === SIDEBAR === */
         .sidebar {
             position: fixed;
-            top: 0; left: 0;
+            top: 0;
+            left: 0;
             height: 100vh;
-            width: 260px;
+            width: var(--sidebar-width);
             background: linear-gradient(160deg, var(--violet), var(--violet-light));
             color: #fff;
             overflow-y: auto;
             box-shadow: 3px 0 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+            transition: transform 0.3s ease;
         }
 
         .sidebar h4 {
@@ -68,11 +79,14 @@
 
         .sidebar .collapse .nav-link {
             padding-left: 2.3rem;
+            padding-right: 3rem !important;
             font-size: 0.92rem;
             margin-bottom: 0.25rem;
         }
 
-        .sidebar li { margin-bottom: 0.6rem; }
+        .sidebar li { 
+            margin-bottom: 0.6rem; 
+        }
 
         .sidebar-footer {
             position: sticky;
@@ -82,29 +96,60 @@
             border-top: 1px solid rgba(255,255,255,0.15);
         }
 
-        /* Badge pour messages et notifications */
+        /* Badge notifications */
         .nav-badge {
             position: absolute;
             top: 50%;
             transform: translateY(-50%);
             right: 10px;
-            background: #dc3545;
+            background: linear-gradient(135deg, #ef4444, #dc2626);
             color: white;
-            border-radius: 50%;
-            width: 22px;
+            border-radius: 12px;
+            min-width: 22px;
             height: 22px;
+            padding: 0 6px;
             font-size: 11px;
             font-weight: bold;
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            box-shadow: 0 2px 6px rgba(239, 68, 68, 0.4);
+            animation: pulse-badge 2s infinite;
         }
 
-        /* === MAIN === */
+        @keyframes pulse-badge {
+            0%, 100% {
+                transform: translateY(-50%) scale(1);
+                box-shadow: 0 2px 6px rgba(239, 68, 68, 0.4);
+            }
+            50% {
+                transform: translateY(-50%) scale(1.1);
+                box-shadow: 0 3px 8px rgba(239, 68, 68, 0.6);
+            }
+        }
+
+        .badge-warning-custom {
+            background: linear-gradient(135deg, #f59e0b, #d97706) !important;
+            box-shadow: 0 2px 6px rgba(245, 158, 11, 0.4);
+        }
+
+        .nav-link:hover .nav-badge {
+            transform: translateY(-50%) scale(1.15);
+            box-shadow: 0 3px 10px rgba(239, 68, 68, 0.6);
+        }
+
+        .nav-badge.large-number {
+            font-size: 9px;
+            padding: 0 4px;
+        }
+
+        /* === MAIN CONTENT === */
         main {
-            margin-left: 260px;
+            margin-left: var(--sidebar-width);
+            min-height: 100vh;
             padding: 2rem;
+            width: calc(100% - var(--sidebar-width));
+            transition: margin-left 0.3s ease, width 0.3s ease;
         }
 
         .navbar {
@@ -124,7 +169,7 @@
             margin-bottom: 1.2rem;
         }
 
-        /* Dropdown notifications dans navbar */
+        /* Dropdown notifications */
         .notification-dropdown {
             width: 380px;
             max-height: 450px;
@@ -165,7 +210,6 @@
         .notification-icon.warning { background-color: #fff3cd; color: #ffc107; }
         .notification-icon.danger { background-color: #f8d7da; color: #dc3545; }
 
-        /* Badge navbar */
         .badge-notification {
             position: absolute;
             top: -5px;
@@ -181,20 +225,85 @@
             justify-content: center;
         }
 
+        /* Toggle button pour mobile */
+        .sidebar-toggle {
+            display: none;
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 1100;
+            background: var(--violet);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+
+        /* === RESPONSIVE === */
         @media (max-width: 992px) {
-            .sidebar { width: 220px; }
-            main { margin-left: 220px; }
-            .notification-dropdown { width: 320px; }
+            :root {
+                --sidebar-width: 220px;
+            }
         }
 
         @media (max-width: 768px) {
             .sidebar {
-                position: relative;
-                width: 100%;
-                height: auto;
+                transform: translateX(-100%);
             }
-            main { margin-left: 0; }
-            .notification-dropdown { width: 280px; }
+
+            .sidebar.show {
+                transform: translateX(0);
+            }
+
+            main {
+                margin-left: 0;
+                width: 100%;
+                padding: 1rem;
+            }
+
+            .sidebar-toggle {
+                display: block;
+            }
+
+            .notification-dropdown {
+                width: 320px;
+            }
+
+            .navbar {
+                margin-top: 3rem;
+            }
+        }
+
+        @media (max-width: 576px) {
+            main {
+                padding: 0.5rem;
+            }
+
+            .notification-dropdown {
+                width: 280px;
+            }
+
+            :root {
+                --sidebar-width: 280px;
+            }
+        }
+
+        /* Overlay pour mobile */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+        }
+
+        .sidebar-overlay.show {
+            display: block;
         }
     </style>
 
@@ -202,8 +311,16 @@
 </head>
 
 <body>
+    <!-- Overlay pour mobile -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <!-- Toggle button pour mobile -->
+    <button class="sidebar-toggle" id="sidebarToggle">
+        <i class="fas fa-bars"></i>
+    </button>
+
     <!-- === SIDEBAR === -->
-    <nav class="sidebar">
+    <nav class="sidebar" id="sidebar">
         <h4><i class="fa-solid fa-school me-2"></i> GS</h4>
         <small><i class="fa fa-user-circle me-1"></i> {{ Auth::user()->name }}</small>
 
@@ -266,7 +383,6 @@
                     <i class="fa fa-chevron-down small"></i>
                 </a>
                 <div class="collapse" id="menuFinances">
-                    <!-- ✅ CORRECTION ICI : admin.rapports.financier -->
                     <a href="{{ route('admin.rapports.financier') }}" 
                        class="nav-link {{ Request::is('admin/rapports/financier*') ? 'active' : '' }}">
                         <i class="fa fa-chart-line me-2"></i> Dashboard Financier
@@ -294,10 +410,47 @@
                     <i class="fa fa-chevron-down small"></i>
                 </a>
                 <div class="collapse" id="menuPedagogie">
-                    <a href="{{ route('notes.index') }}" class="nav-link"><i class="fa fa-clipboard-list me-2"></i> Notes</a>
-                    <a href="{{ route('absences.index') }}" class="nav-link"><i class="fa fa-calendar-xmark me-2"></i> Absences</a>
-                    <a href="{{ route('planning.index') }}" class="nav-link"><i class="fa fa-calendar-days me-2"></i> Planning</a>
-                    <a href="{{ route('bulletins.index') }}" class="nav-link"><i class="fa fa-file-lines me-2"></i> Bulletins</a>
+                    <a href="{{ route('notes.index') }}" class="nav-link">
+                        <i class="fa fa-clipboard-list me-2"></i> Notes
+                    </a>
+                    <a href="{{ route('absences.index') }}" class="nav-link">
+                        <i class="fa fa-calendar-xmark me-2"></i> Absences
+                    </a>
+                    <a href="{{ route('planning.index') }}" class="nav-link">
+                        <i class="fa fa-calendar-days me-2"></i> Planning
+                    </a>
+                    
+                    @php
+                        $pendingBulletins = \App\Models\Bulletin::whereNull('validated_at')->count();
+                    @endphp
+                    
+                    <a href="{{ route('bulletins.index') }}" 
+                       class="nav-link {{ request()->routeIs('bulletins.index', 'bulletins.show') ? 'active' : '' }}" 
+                       style="position: relative;">
+                        <i class="fa fa-file-lines me-2"></i> Bulletins
+                        
+                        @if($pendingBulletins > 0)
+                            <span class="nav-badge" id="bulletinBadge">{{ $pendingBulletins }}</span>
+                        @endif
+                    </a>
+                    
+                    @if($pendingBulletins > 0)
+                        <a href="{{ route('bulletins.pending') }}" 
+                           class="nav-link {{ request()->routeIs('bulletins.pending') ? 'active' : '' }}"
+                           style="position: relative;"
+                           id="bulletinPendingLink">
+                            <i class="fas fa-clock me-2"></i> <span style="color: #fbbf24;">À valider</span>
+                            <span class="nav-badge badge-warning-custom">{{ $pendingBulletins }}</span>
+                        </a>
+                    @else
+                        <a href="{{ route('bulletins.pending') }}" 
+                           class="nav-link"
+                           style="position: relative; display: none;"
+                           id="bulletinPendingLink">
+                            <i class="fas fa-clock me-2"></i> <span style="color: #fbbf24;">À valider</span>
+                            <span class="nav-badge badge-warning-custom">0</span>
+                        </a>
+                    @endif
                 </div>
             </li>
 
@@ -329,11 +482,11 @@
 
     <!-- === CONTENU PRINCIPAL === -->
     <main>
-        <nav class="navbar px-3 py-2 d-flex justify-content-between align-items-center">
-            <h5>@yield('page-title', 'Tableau de bord Administrateur')</h5>
+        <nav class="navbar px-3 py-2 d-flex justify-content-between align-items-center flex-wrap">
+            <h5 class="mb-0">@yield('page-title', 'Tableau de bord Administrateur')</h5>
             
-            <div class="d-flex align-items-center gap-3">
-                <!-- Dropdown Notifications dans navbar -->
+            <div class="d-flex align-items-center gap-3 flex-wrap">
+                <!-- Dropdown Notifications -->
                 <div class="dropdown">
                     <a class="position-relative text-decoration-none" href="#" 
                        id="notificationDropdown" role="button" 
@@ -346,7 +499,6 @@
                     
                     <div class="dropdown-menu dropdown-menu-end notification-dropdown p-0 shadow-lg rounded-3" 
                          aria-labelledby="notificationDropdown">
-                        <!-- Header -->
                         <div class="d-flex justify-content-between align-items-center p-3 border-bottom" 
                              style="background: linear-gradient(135deg, var(--violet), var(--violet-light));">
                             <h6 class="mb-0 fw-bold text-white">
@@ -359,7 +511,6 @@
                             </button>
                         </div>
                         
-                        <!-- Liste -->
                         <div id="notificationList">
                             <div class="text-center py-5">
                                 <i class="fas fa-spinner fa-spin text-muted fa-2x"></i>
@@ -367,7 +518,6 @@
                             </div>
                         </div>
                         
-                        <!-- Footer -->
                         <div class="text-center p-2 border-top bg-light">
                             <a href="{{ route('notifications.index') }}" 
                                class="btn btn-sm btn-link text-decoration-none fw-semibold" 
@@ -379,7 +529,7 @@
                 </div>
 
                 <span class="badge bg-primary">{{ Auth::user()->role }}</span>
-                <span><i class="fa fa-user me-1"></i> {{ Auth::user()->name }}</span>
+                <span class="d-none d-md-inline"><i class="fa fa-user me-1"></i> {{ Auth::user()->name }}</span>
             </div>
         </nav>
 
@@ -401,34 +551,43 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
-    <!-- ================================ -->
-    <!-- SCRIPT NOTIFICATIONS + MESSAGES -->
-    <!-- ================================ -->
     <script>
         const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
 
-        // Chargement initial au démarrage
+        // Toggle sidebar sur mobile
+        document.getElementById('sidebarToggle')?.addEventListener('click', function() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            sidebar.classList.toggle('show');
+            overlay.classList.toggle('show');
+        });
+
+        // Fermer sidebar quand on clique sur l'overlay
+        document.getElementById('sidebarOverlay')?.addEventListener('click', function() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            sidebar.classList.remove('show');
+            overlay.classList.remove('show');
+        });
+
+        // Chargement initial
         document.addEventListener('DOMContentLoaded', function() {
             loadNotifications();
             updateNotificationCount();
+            updateBulletinCount();
             
-            // Actualisation automatique toutes les 30 secondes
             setInterval(() => {
                 updateNotificationCount();
                 updateMessageCount();
+                updateBulletinCount();
             }, 30000);
             
-            // Recharger les notifications quand on ouvre le dropdown
             document.getElementById('notificationDropdown')?.addEventListener('click', function() {
                 loadNotifications();
             });
         });
 
-        // =============================
         // FONCTIONS NOTIFICATIONS
-        // =============================
-
-        // Charger les notifications récentes
         async function loadNotifications() {
             try {
                 const response = await fetch('{{ route("notifications.recent") }}');
@@ -481,16 +640,9 @@
                 
             } catch (error) {
                 console.error('Erreur chargement notifications:', error);
-                document.getElementById('notificationList').innerHTML = `
-                    <div class="text-center py-4 text-danger">
-                        <i class="fas fa-exclamation-triangle mb-2"></i>
-                        <p class="mb-0 small">Erreur de chargement</p>
-                    </div>
-                `;
             }
         }
 
-        // Mettre à jour le compteur de notifications
         async function updateNotificationCount() {
             try {
                 const response = await fetch('{{ route("notifications.unread-count") }}');
@@ -520,10 +672,8 @@
             }
         }
 
-        // Gérer le clic sur une notification
         async function handleNotificationClick(notificationId, url) {
             try {
-                // Marquer comme lue
                 await fetch(`/notifications/${notificationId}/read`, {
                     method: 'POST',
                     headers: {
@@ -532,11 +682,9 @@
                     }
                 });
                 
-                // Mettre à jour les compteurs
                 updateNotificationCount();
                 loadNotifications();
                 
-                // Rediriger si URL présente
                 if (url && url !== '' && url !== '#') {
                     window.location.href = url;
                 }
@@ -545,7 +693,6 @@
             }
         }
 
-        // Marquer toutes les notifications comme lues
         async function markAllAsRead() {
             try {
                 const response = await fetch('{{ route("notifications.read-all") }}', {
@@ -559,17 +706,13 @@
                 if (response.ok) {
                     loadNotifications();
                     updateNotificationCount();
-                    
-                    // Afficher un message de succès temporaire
                     showToast('Toutes les notifications ont été marquées comme lues', 'success');
                 }
             } catch (error) {
                 console.error('Erreur marquage notifications:', error);
-                showToast('Erreur lors du marquage', 'danger');
             }
         }
 
-        // Supprimer une notification
         async function deleteNotification(notificationId) {
             try {
                 const response = await fetch(`/notifications/${notificationId}`, {
@@ -584,15 +727,9 @@
                 }
             } catch (error) {
                 console.error('Erreur suppression:', error);
-                showToast('Erreur lors de la suppression', 'danger');
             }
         }
 
-        // =============================
-        // FONCTIONS MESSAGES
-        // =============================
-
-        // Mettre à jour le compteur de messages
         async function updateMessageCount() {
             try {
                 const response = await fetch('{{ route("messages.unread-count") }}');
@@ -620,9 +757,49 @@
             }
         }
 
-        // =============================
-        // FONCTION UTILITAIRE TOAST
-        // =============================
+        async function updateBulletinCount() {
+            try {
+                const response = await fetch('{{ route("bulletins.pending-count") }}');
+                const data = await response.json();
+                
+                const bulletinBadge = document.getElementById('bulletinBadge');
+                const pendingLink = document.getElementById('bulletinPendingLink');
+                
+                if (data.count > 0) {
+                    const displayCount = data.count > 99 ? '99+' : data.count;
+                    
+                    if (bulletinBadge) {
+                        bulletinBadge.textContent = displayCount;
+                        bulletinBadge.style.display = 'flex';
+                        
+                        if (data.count > 99) {
+                            bulletinBadge.classList.add('large-number');
+                        } else {
+                            bulletinBadge.classList.remove('large-number');
+                        }
+                    }
+                    
+                    if (pendingLink) {
+                        pendingLink.style.display = 'block';
+                        const pendingBadge = pendingLink.querySelector('.nav-badge');
+                        if (pendingBadge) {
+                            pendingBadge.textContent = displayCount;
+                        }
+                    }
+                } else {
+                    if (bulletinBadge) {
+                        bulletinBadge.style.display = 'none';
+                    }
+                    
+                    if (pendingLink) {
+                        pendingLink.style.display = 'none';
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Erreur compteur bulletins:', error);
+            }
+        }
 
         function showToast(message, type = 'info') {
             const toast = document.createElement('div');

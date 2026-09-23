@@ -44,7 +44,16 @@ class PaiementPolicy
     }
 
     /**
-     * Valider/Refuser un paiement
+     * Modifier, valider ou refuser un paiement
+     */
+    public function update(User $user, Paiement $paiement)
+    {
+        // Autoriser les administrateurs à valider/refuser
+        return $user->isAdmin();
+    }
+
+    /**
+     * Valider/Refuser un paiement (ancienne méthode)
      */
     public function validate(User $user, Paiement $paiement)
     {

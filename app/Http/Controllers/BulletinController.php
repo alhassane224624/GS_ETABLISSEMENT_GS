@@ -21,16 +21,30 @@ class BulletinController extends Controller
         $this->middleware('admin');
     }
 
+    /**
+     * Affiche la liste de tous les bulletins avec filtres
+     */
     public function index(Request $request)
     {
         $query = Bulletin::with(['stagiaire', 'classe', 'periode', 'creator']);
 
+        // Filtre par classe
         if ($request->filled('classe_id')) {
             $query->where('classe_id', $request->classe_id);
         }
 
+        // Filtre par période
         if ($request->filled('periode_id')) {
             $query->where('periode_id', $request->periode_id);
+        }
+
+        // ✅ Filtre par statut de validation
+        if ($request->filled('statut')) {
+            if ($request->statut === 'valide') {
+                $query->whereNotNull('validated_at');
+            } elseif ($request->statut === 'en_attente') {
+                $query->whereNull('validated_at');
+            }
         }
 
         $bulletins = $query->latest()->paginate(20);
@@ -41,6 +55,37 @@ class BulletinController extends Controller
         return view('bulletins.index', compact('bulletins', 'classes', 'periodes'));
     }
 
+    /**
+     * ✅ NOUVEAU : Affiche uniquement les bulletins en attente de validation
+     */
+    public function pending()
+    {
+        $bulletins = Bulletin::with(['stagiaire', 'classe', 'periode'])
+            ->whereNull('validated_at')
+            ->latest()
+            ->get();
+
+        return view('bulletins.pending', compact('bulletins'));
+    }
+
+    /**
+     * ✅ NOUVEAU : API - Retourne le nombre de bulletins en attente
+     */
+    public function pendingCount()
+    {
+        $count = Bulletin::whereNull('validated_at')->count();
+        
+        return response()->json([
+            'count' => $count,
+            'message' => $count > 0 
+                ? "{$count} bulletin(s) en attente" 
+                : 'Aucun bulletin en attente'
+        ]);
+    }
+
+    /**
+     * Génère des bulletins pour une classe et une période
+     */
     public function generate(Request $request)
     {
         $validated = $request->validate([
@@ -61,25 +106,31 @@ class BulletinController extends Controller
             if (!$exists) {
                 $bulletin = $this->generateBulletinForStagiaire($stagiaire, $classe, $periode);
                 
-                // 🔔 NOTIFICATION : Notifier le stagiaire que son bulletin est prêt
-                if ($bulletin && $stagiaire->user) {
-                    $stagiaire->user->notify(new BulletinGenerated($bulletin));
-                }
+                // 🔔 Note : Ne pas notifier lors de la génération, seulement lors de la validation
+                // if ($bulletin && $stagiaire->user) {
+                //     $stagiaire->user->notify(new BulletinGenerated($bulletin));
+                // }
                 
                 $generated++;
             }
         }
 
         return redirect()->back()
-            ->with('success', "{$generated} bulletins générés avec succès.");
+            ->with('success', "{$generated} bulletin(s) généré(s) avec succès. Pensez à les valider !");
     }
 
+    /**
+     * Affiche les détails d'un bulletin
+     */
     public function show(Bulletin $bulletin)
     {
         $bulletin->load(['stagiaire', 'classe.niveau', 'classe.filiere', 'periode']);
         return view('bulletins.show', compact('bulletin'));
     }
 
+    /**
+     * Télécharge un bulletin en PDF
+     */
     public function downloadPdf(Bulletin $bulletin)
     {
         $bulletin->load(['stagiaire', 'classe.niveau', 'classe.filiere', 'periode']);
@@ -92,6 +143,9 @@ class BulletinController extends Controller
         return $pdf->download($filename);
     }
 
+    /**
+     * Valide un bulletin (action individuelle)
+     */
     public function validateBulletin(Bulletin $bulletin)
     {
         if ($bulletin->validated_at) {
@@ -104,10 +158,55 @@ class BulletinController extends Controller
             'validated_by' => Auth::id(),
         ]);
 
+        // 🔔 NOTIFICATION : Notifier le stagiaire que son bulletin est validé
+        if ($bulletin->stagiaire && $bulletin->stagiaire->user) {
+            $bulletin->stagiaire->user->notify(new BulletinGenerated($bulletin));
+        }
+
         return redirect()->back()
-            ->with('success', 'Bulletin validé avec succès.');
+            ->with('success', 'Bulletin validé avec succès. Le stagiaire a été notifié.');
     }
 
+    /**
+     * ✅ NOUVEAU : Valide plusieurs bulletins en une seule fois
+     */
+    public function validateMultiple(Request $request)
+    {
+        $validated = $request->validate([
+            'bulletin_ids' => 'required|array',
+            'bulletin_ids.*' => 'exists:bulletins,id'
+        ]);
+
+        $count = 0;
+        
+        foreach ($validated['bulletin_ids'] as $bulletinId) {
+            $bulletin = Bulletin::find($bulletinId);
+            
+            if ($bulletin && !$bulletin->validated_at) {
+                $bulletin->update([
+                    'validated_at' => now(),
+                    'validated_by' => Auth::id(),
+                ]);
+                
+                // 🔔 NOTIFICATION : Notifier chaque stagiaire
+                if ($bulletin->stagiaire && $bulletin->stagiaire->user) {
+                    $bulletin->stagiaire->user->notify(new BulletinGenerated($bulletin));
+                }
+                
+                $count++;
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => "{$count} bulletin(s) validé(s) avec succès. Les stagiaires ont été notifiés."
+        ]);
+    }
+
+    /**
+     * Génère un bulletin pour un stagiaire spécifique
+     * @private
+     */
     private function generateBulletinForStagiaire(Stagiaire $stagiaire, Classe $classe, Periode $periode)
     {
         $notes = Note::where('stagiaire_id', $stagiaire->id)
@@ -148,6 +247,7 @@ class BulletinController extends Controller
         $moyenneGenerale = $totalCoefficients > 0 ? 
             round($totalPoints / $totalCoefficients, 2) : 0;
 
+        // Calculer le rang dans la classe
         $stagiairesDeLaClasse = $classe->stagiaires()
             ->whereHas('notes', function($q) use ($periode) {
                 $q->where('periode_id', $periode->id);
@@ -199,9 +299,16 @@ class BulletinController extends Controller
             'appreciation_generale' => $appreciation,
             'moyennes_matieres' => $moyennesParMatiere->values()->toArray(),
             'created_by' => Auth::id(),
+            // ✅ Important : Le bulletin n'est PAS validé automatiquement
+            'validated_at' => null,
+            'validated_by' => null,
         ]);
     }
 
+    /**
+     * Génère une appréciation selon la moyenne
+     * @private
+     */
     private function genererAppreciation($moyenne, $rang, $totalEleves)
     {
         if ($moyenne >= 16) {

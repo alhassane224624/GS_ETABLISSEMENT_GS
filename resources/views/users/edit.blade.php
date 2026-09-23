@@ -35,7 +35,7 @@
                     <div class="col-md-6">
                         <h5 class="mb-3">Informations de base</h5>
                         
-                        <div class="form-group">
+                        <div class="form-group mb-3">
                             <label for="name">Nom complet <span class="text-danger">*</span></label>
                             <input type="text" name="name" id="name" class="form-control @error('name') is-invalid @enderror" value="{{ old('name', $user->name) }}" required>
                             @error('name')
@@ -43,7 +43,7 @@
                             @enderror
                         </div>
 
-                        <div class="form-group">
+                        <div class="form-group mb-3">
                             <label for="email">Email <span class="text-danger">*</span></label>
                             <input type="email" name="email" id="email" class="form-control @error('email') is-invalid @enderror" value="{{ old('email', $user->email) }}" required>
                             @error('email')
@@ -51,7 +51,7 @@
                             @enderror
                         </div>
 
-                        <div class="form-group">
+                        <div class="form-group mb-3">
                             <label for="password">Nouveau mot de passe <small class="text-muted">(laisser vide pour ne pas changer)</small></label>
                             <input type="password" name="password" id="password" class="form-control @error('password') is-invalid @enderror">
                             @error('password')
@@ -59,16 +59,17 @@
                             @enderror
                         </div>
 
-                        <div class="form-group">
+                        <div class="form-group mb-3">
                             <label for="password_confirmation">Confirmer le mot de passe</label>
                             <input type="password" name="password_confirmation" id="password_confirmation" class="form-control">
                         </div>
 
-                        <div class="form-group">
+                        <div class="form-group mb-3">
                             <label for="role">Rôle <span class="text-danger">*</span></label>
                             <select name="role" id="role" class="form-control @error('role') is-invalid @enderror" required>
                                 <option value="stagiaire" {{ old('role', $user->role) == 'stagiaire' ? 'selected' : '' }}>Stagiaire</option>
                                 <option value="professeur" {{ old('role', $user->role) == 'professeur' ? 'selected' : '' }}>Professeur</option>
+                                <option value="comptable" {{ old('role', $user->role) == 'comptable' ? 'selected' : '' }}>💼 Comptable</option>
                                 <option value="administrateur" {{ old('role', $user->role) == 'administrateur' ? 'selected' : '' }}>Administrateur</option>
                             </select>
                             @error('role')
@@ -76,7 +77,7 @@
                             @enderror
                         </div>
 
-                        <div class="form-group">
+                        <div class="form-group mb-3">
                             <label for="telephone">Téléphone</label>
                             <input type="text" name="telephone" id="telephone" class="form-control @error('telephone') is-invalid @enderror" value="{{ old('telephone', $user->telephone) }}">
                             @error('telephone')
@@ -84,10 +85,10 @@
                             @enderror
                         </div>
 
-                        <div class="form-group">
-                            <div class="custom-control custom-checkbox">
-                                <input type="checkbox" class="custom-control-input" id="is_active" name="is_active" value="1" {{ old('is_active', $user->is_active) ? 'checked' : '' }}>
-                                <label class="custom-control-label" for="is_active">Compte actif</label>
+                        <div class="form-group mb-3">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="is_active" name="is_active" value="1" {{ old('is_active', $user->is_active) ? 'checked' : '' }}>
+                                <label class="form-check-label" for="is_active">Compte actif</label>
                             </div>
                         </div>
                     </div>
@@ -95,7 +96,7 @@
                     <div class="col-md-6">
                         <h5 class="mb-3">Informations complémentaires</h5>
 
-                        <div class="form-group">
+                        <div class="form-group mb-3">
                             <label for="specialite">Spécialité</label>
                             <input type="text" name="specialite" id="specialite" class="form-control @error('specialite') is-invalid @enderror" value="{{ old('specialite', $user->specialite) }}">
                             @error('specialite')
@@ -103,7 +104,7 @@
                             @enderror
                         </div>
 
-                        <div class="form-group">
+                        <div class="form-group mb-3">
                             <label for="bio">Biographie</label>
                             <textarea name="bio" id="bio" rows="4" class="form-control @error('bio') is-invalid @enderror">{{ old('bio', $user->bio) }}</textarea>
                             @error('bio')
@@ -115,14 +116,14 @@
                             <hr>
                             <h5 class="mb-3">Attribution Professeur</h5>
 
-                            <div class="form-group">
+                            <div class="form-group mb-3">
                                 <label>Filières</label>
                                 <div class="border p-3" style="max-height: 200px; overflow-y: auto;">
                                     @foreach($filieres as $filiere)
-                                        <div class="custom-control custom-checkbox">
-                                            <input type="checkbox" class="custom-control-input" id="filiere_{{ $filiere->id }}" name="filieres[]" value="{{ $filiere->id }}" 
+                                        <div class="form-check">
+                                            <input type="checkbox" class="form-check-input" id="filiere_{{ $filiere->id }}" name="filieres[]" value="{{ $filiere->id }}" 
                                             {{ in_array($filiere->id, old('filieres', $user->filieres->pluck('id')->toArray())) ? 'checked' : '' }}>
-                                            <label class="custom-control-label" for="filiere_{{ $filiere->id }}">
+                                            <label class="form-check-label" for="filiere_{{ $filiere->id }}">
                                                 {{ $filiere->nom }} ({{ $filiere->niveau }})
                                             </label>
                                         </div>
@@ -130,19 +131,34 @@
                                 </div>
                             </div>
 
-                            <div class="form-group">
+                            <div class="form-group mb-3">
                                 <label>Matières</label>
                                 <div class="border p-3" style="max-height: 200px; overflow-y: auto;">
                                     @foreach($matieres as $matiere)
-                                        <div class="custom-control custom-checkbox">
-                                            <input type="checkbox" class="custom-control-input" id="matiere_{{ $matiere->id }}" name="matieres[]" value="{{ $matiere->id }}" 
+                                        <div class="form-check">
+                                            <input type="checkbox" class="form-check-input" id="matiere_{{ $matiere->id }}" name="matieres[]" value="{{ $matiere->id }}" 
                                             {{ in_array($matiere->id, old('matieres', $user->matieresEnseignees->pluck('id')->toArray())) ? 'checked' : '' }}>
-                                            <label class="custom-control-label" for="matiere_{{ $matiere->id }}">
+                                            <label class="form-check-label" for="matiere_{{ $matiere->id }}">
                                                 {{ $matiere->nom }} ({{ $matiere->code }})
                                             </label>
                                         </div>
                                     @endforeach
                                 </div>
+                            </div>
+                        </div>
+
+                        <div id="comptable-section" style="display: none;">
+                            <hr>
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle"></i>
+                                <strong>Rôle Comptable</strong>
+                                <p class="mb-0 mt-2">Ce compte a accès à :</p>
+                                <ul class="mb-0 mt-2">
+                                    <li>Gestion des paiements</li>
+                                    <li>Gestion des échéanciers</li>
+                                    <li>Gestion des remises</li>
+                                    <li>Rapports financiers</li>
+                                </ul>
                             </div>
                         </div>
                     </div>
@@ -166,15 +182,23 @@
 <script>
 document.getElementById('role').addEventListener('change', function() {
     const professeurSection = document.getElementById('professeur-section');
+    const comptableSection = document.getElementById('comptable-section');
+    
+    professeurSection.style.display = 'none';
+    comptableSection.style.display = 'none';
+    
     if(this.value === 'professeur') {
         professeurSection.style.display = 'block';
-    } else {
-        professeurSection.style.display = 'none';
+    } else if(this.value === 'comptable') {
+        comptableSection.style.display = 'block';
     }
 });
 
+// Au chargement
 if(document.getElementById('role').value === 'professeur') {
     document.getElementById('professeur-section').style.display = 'block';
+} else if(document.getElementById('role').value === 'comptable') {
+    document.getElementById('comptable-section').style.display = 'block';
 }
 </script>
 @endsection

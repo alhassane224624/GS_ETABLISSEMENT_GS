@@ -10,6 +10,9 @@ use Illuminate\View\View;
 
 class NotificationController extends Controller
 {
+    /**
+     * Affiche la liste des notifications
+     */
     public function index(): View
     {
         $notifications = Auth::user()
@@ -22,6 +25,9 @@ class NotificationController extends Controller
         return view('notifications.index', compact('notifications', 'unreadCount'));
     }
 
+    /**
+     * Marque une notification comme lue
+     */
     public function markAsRead(string $id): JsonResponse
     {
         $notification = Auth::user()
@@ -38,11 +44,14 @@ class NotificationController extends Controller
         ]);
     }
 
+    /**
+     * Marque toutes les notifications comme lues
+     */
     public function markAllAsRead(): JsonResponse|RedirectResponse
     {
         $updated = Auth::user()
-            ->unreadNotifications()
-            ->update(['read_at' => now()]);
+            ->unreadNotifications
+            ->markAsRead();
 
         if (request()->wantsJson()) {
             return response()->json([
@@ -57,7 +66,10 @@ class NotificationController extends Controller
             ->with('success', "Toutes les notifications ont été marquées comme lues");
     }
 
-    public function destroy(string $id): JsonResponse
+    /**
+     * Supprime une notification (POST au lieu de DELETE pour compatibilité)
+     */
+    public function destroy(string $id): JsonResponse|RedirectResponse
     {
         $notification = Auth::user()
             ->notifications()
@@ -65,25 +77,43 @@ class NotificationController extends Controller
         
         $notification->delete();
 
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Notification supprimée'
-        ]);
+        if (request()->wantsJson()) {
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Notification supprimée'
+            ]);
+        }
+
+        return redirect()
+            ->back()
+            ->with('success', 'Notification supprimée');
     }
 
-    public function deleteRead(): JsonResponse
+    /**
+     * Supprime toutes les notifications lues
+     */
+    public function deleteRead(): JsonResponse|RedirectResponse
     {
         $deleted = Auth::user()
             ->readNotifications()
             ->delete();
 
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Notifications lues supprimées',
-            'deleted_count' => $deleted
-        ]);
+        if (request()->wantsJson()) {
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Notifications lues supprimées',
+                'deleted_count' => $deleted
+            ]);
+        }
+
+        return redirect()
+            ->back()
+            ->with('success', "{$deleted} notification(s) supprimée(s)");
     }
 
+    /**
+     * Retourne le nombre de notifications non lues
+     */
     public function getUnreadCount(): JsonResponse
     {
         $count = Auth::user()->unreadNotifications()->count();
@@ -94,6 +124,9 @@ class NotificationController extends Controller
         ]);
     }
 
+    /**
+     * Retourne les notifications récentes
+     */
     public function getRecent(Request $request): JsonResponse
     {
         $limit = $request->input('limit', 5);
@@ -122,16 +155,33 @@ class NotificationController extends Controller
         ]);
     }
 
+    /**
+     * Détermine l'URL de redirection pour une notification
+     */
     private function getNotificationUrl($notification): ?string
     {
         $data = $notification->data;
 
+        // URL explicite dans les données
+        if (isset($data['url']) && !empty($data['url'])) {
+            return $data['url'];
+        }
+
+        // Routes basées sur les IDs
         if (isset($data['stagiaire_id'])) {
             return route('stagiaires.show', $data['stagiaire_id']);
         }
 
-        if (isset($data['url'])) {
-            return $data['url'];
+        if (isset($data['bulletin_id'])) {
+            return route('bulletins.show', $data['bulletin_id']);
+        }
+
+        if (isset($data['paiement_id'])) {
+            return route('paiements.show', $data['paiement_id']);
+        }
+
+        if (isset($data['message_id']) && isset($data['user_id'])) {
+            return route('messages.conversation', $data['user_id']);
         }
 
         return null;

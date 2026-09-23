@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="utf-8">
-    <title>Bulletin - {{ $stagiaire->matricule }}</title>
+    <meta charset="UTF-8">
+    <title>📘 Bulletin Scolaire - {{ $bulletin->stagiaire->nom }} {{ $bulletin->stagiaire->prenom }}</title>
     <style>
         * {
             margin: 0;
@@ -13,243 +13,260 @@
         body {
             font-family: 'DejaVu Sans', Arial, sans-serif;
             font-size: 11px;
-            line-height: 1.4;
             color: #333;
-            padding: 20px;
+            background: #fff;
+            padding: 25px 35px;
+            line-height: 1.5;
         }
 
+        /* ===== HEADER ===== */
         .header {
             text-align: center;
-            margin-bottom: 30px;
-            border-bottom: 3px solid #3b82f6;
+            border-bottom: 2px solid #3b82f6;
             padding-bottom: 15px;
+            margin-bottom: 25px;
         }
 
         .header h1 {
-            color: #3b82f6;
-            font-size: 24px;
+            font-size: 20px;
+            color: #2563eb;
+            text-transform: uppercase;
+            font-weight: bold;
             margin-bottom: 5px;
         }
 
         .header h2 {
-            color: #666;
-            font-size: 16px;
-            font-weight: normal;
+            font-size: 14px;
+            color: #444;
+            margin-bottom: 3px;
         }
 
-        .info-section {
-            width: 100%;
-            margin-bottom: 20px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            padding: 15px;
+        .header p {
+            font-size: 11px;
+            color: #666;
+        }
+
+        /* ===== INFOS STAGIAIRE ===== */
+        .info-box {
+            border: 1px solid #e5e7eb;
             background: #f9fafb;
+            border-radius: 5px;
+            padding: 12px 15px;
+            margin-bottom: 20px;
         }
 
         .info-row {
-            margin-bottom: 8px;
+            margin: 5px 0;
         }
 
         .info-label {
             font-weight: bold;
-            color: #555;
+            color: #374151;
             display: inline-block;
-            width: 150px;
+            width: 130px;
         }
 
-        .info-value {
-            display: inline-block;
-        }
-
+        /* ===== TABLEAU DES NOTES ===== */
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 20px;
+            margin-top: 10px;
             margin-bottom: 20px;
-        }
-
-        th {
-            background-color: #3b82f6;
-            color: white;
-            padding: 10px;
-            text-align: left;
-            font-weight: bold;
             font-size: 11px;
         }
 
-        td {
-            border: 1px solid #ddd;
+        th {
+            background-color: #2563eb;
+            color: white;
+            text-align: center;
             padding: 8px;
+        }
+
+        td {
+            border: 1px solid #d1d5db;
+            padding: 6px;
+            text-align: center;
+        }
+
+        td:first-child {
+            text-align: left;
         }
 
         tr:nth-child(even) {
             background-color: #f9fafb;
         }
 
-        .moyenne-cell {
-            text-align: center;
-            font-weight: bold;
-            font-size: 12px;
-        }
-
-        .appreciation-section {
-            margin-top: 20px;
-            padding: 15px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            background: #f9fafb;
-        }
-
-        .appreciation-section h3 {
-            color: #3b82f6;
-            font-size: 14px;
-            margin-bottom: 10px;
-        }
-
         .total-row {
-            background-color: #3b82f6 !important;
-            color: white;
+            background-color: #eff6ff !important;
             font-weight: bold;
-            font-size: 12px;
+            color: #1e3a8a;
         }
 
-        .total-row td {
-            border-color: #2563eb;
-            padding: 12px 8px;
+        /* ===== TABLEAU RÉCAPITULATIF ===== */
+        .summary-table td {
+            border: 1px solid #2563eb;
+            padding: 8px;
         }
 
+        .summary-table strong {
+            color: #1e3a8a;
+        }
+
+        /* ===== APPRÉCIATION ===== */
+        .appreciation {
+            background-color: #f8fafc;
+            border: 1px solid #dbeafe;
+            border-left: 5px solid #2563eb;
+            padding: 12px;
+            border-radius: 5px;
+            margin-top: 15px;
+            font-size: 11px;
+        }
+
+        .appreciation strong {
+            color: #1e3a8a;
+        }
+
+        /* ===== SIGNATURES ===== */
+        .signatures {
+            margin-top: 70px;
+            width: 100%;
+            display: table;
+        }
+
+        .signatures .col {
+            display: table-cell;
+            width: 50%;
+            vertical-align: top;
+            text-align: center;
+        }
+
+        .signatures .col.left {
+            padding-left: 60px;
+        }
+
+        .signatures .col.right {
+            padding-right: 60px;
+            position: relative;
+            top: -20px; /* 🔹 remonte Chef de Pôle */
+        }
+
+        .signatures .col span {
+            display: inline-block;
+            margin-top: 10px;
+            font-weight: bold;
+            text-decoration: underline;
+            color: #1f2937;
+        }
+
+        /* ===== FOOTER ===== */
         .footer {
-            margin-top: 40px;
+            margin-top: 120px;
             text-align: center;
             font-size: 9px;
-            color: #666;
-            border-top: 1px solid #ddd;
-            padding-top: 10px;
-        }
-
-        .badge {
-            display: inline-block;
-            padding: 4px 8px;
-            border-radius: 3px;
-            font-size: 10px;
-            font-weight: bold;
-        }
-
-        .badge-success {
-            background-color: #10b981;
-            color: white;
-        }
-
-        .badge-danger {
-            background-color: #ef4444;
-            color: white;
+            color: #555;
+            line-height: 1.6;
         }
     </style>
 </head>
 <body>
-    <!-- En-tête -->
+
+    <!-- ===== HEADER ===== -->
     <div class="header">
-        <h1>📋 BULLETIN SCOLAIRE</h1>
+        <h1>📘 BULLETIN SCOLAIRE</h1>
         <h2>{{ $bulletin->periode->nom ?? 'Période non définie' }}</h2>
-        @if($bulletin->periode && $bulletin->periode->anneeScolaire)
-            <p style="color: #666; margin-top: 5px;">
-                Année scolaire {{ $bulletin->periode->anneeScolaire->nom }}
-            </p>
-        @endif
+        <p>Année scolaire {{ $bulletin->periode->anneeScolaire->nom ?? 'N/A' }}</p>
     </div>
 
-    <!-- Informations stagiaire -->
-    <div class="info-section">
-        <div class="info-row">
-            <span class="info-label">Nom complet :</span>
-            <span class="info-value">{{ $stagiaire->prenom }} {{ $stagiaire->nom }}</span>
-        </div>
-        <div class="info-row">
-            <span class="info-label">Matricule :</span>
-            <span class="info-value">{{ $stagiaire->matricule }}</span>
-        </div>
-        <div class="info-row">
-            <span class="info-label">Filière :</span>
-            <span class="info-value">{{ $stagiaire->filiere->nom ?? 'N/A' }}</span>
-        </div>
-        <div class="info-row">
-            <span class="info-label">Classe :</span>
-            <span class="info-value">{{ $bulletin->classe->nom ?? 'N/A' }}</span>
-        </div>
+    <!-- ===== INFOS STAGIAIRE ===== -->
+    <div class="info-box">
+        <div class="info-row"><span class="info-label">Nom complet :</span> {{ strtoupper($bulletin->stagiaire->nom) }} {{ ucfirst($bulletin->stagiaire->prenom) }}</div>
+        <div class="info-row"><span class="info-label">Matricule :</span> {{ $bulletin->stagiaire->matricule }}</div>
+        <div class="info-row"><span class="info-label">Filière :</span> {{ $bulletin->classe->filiere->nom ?? 'N/A' }}</div>
+        <div class="info-row"><span class="info-label">Classe :</span> {{ $bulletin->classe->nom ?? 'N/A' }}</div>
     </div>
 
-    <!-- Tableau des notes -->
+    <!-- ===== TABLEAU DES NOTES ===== -->
+    @php
+        $moyennes = is_array($bulletin->moyennes_matieres)
+            ? $bulletin->moyennes_matieres
+            : json_decode($bulletin->moyennes_matieres, true) ?? [];
+        $totalPoints = 0;
+        $totalCoef = 0;
+    @endphp
+
     <table>
         <thead>
             <tr>
-                <th style="width: 40%;">Matière</th>
-                <th style="width: 15%; text-align: center;">Coefficient</th>
-                <th style="width: 20%; text-align: center;">Moyenne</th>
-                <th style="width: 25%; text-align: center;">Appréciation</th>
+                <th>Matière</th>
+                <th>Type (R/L)</th>
+                <th>Note /20</th>
+                <th>Coef</th>
+                <th>Note GLE (Note × Coef)</th>
             </tr>
         </thead>
         <tbody>
-            @if($bulletin->moyennes_matieres && count($bulletin->moyennes_matieres) > 0)
-                @foreach($bulletin->moyennes_matieres as $moyenneMatiere)
-                    <tr>
-                        <td>{{ $moyenneMatiere['matiere'] ?? 'N/A' }}</td>
-                        <td style="text-align: center;">{{ $moyenneMatiere['coefficient'] ?? '-' }}</td>
-                        <td class="moyenne-cell">
-                            {{ number_format($moyenneMatiere['moyenne'] ?? 0, 2) }}/20
-                        </td>
-                        <td style="text-align: center;">
-                            @php
-                                $moy = $moyenneMatiere['moyenne'] ?? 0;
-                            @endphp
-                            @if($moy >= 16)
-                                <span class="badge badge-success">Excellent</span>
-                            @elseif($moy >= 14)
-                                <span class="badge badge-success">Très bien</span>
-                            @elseif($moy >= 12)
-                                <span class="badge badge-success">Bien</span>
-                            @elseif($moy >= 10)
-                                <span class="badge badge-success">Passable</span>
-                            @else
-                                <span class="badge badge-danger">Insuffisant</span>
-                            @endif
-                        </td>
-                    </tr>
-                @endforeach
-            @else
+            @foreach ($moyennes as $matiere)
+                @php
+                    if (!is_array($matiere)) continue;
+                    $note = (float)($matiere['moyenne'] ?? 0);
+                    $coef = (int)($matiere['coefficient'] ?? 1);
+                    $points = $note * $coef;
+                    $totalPoints += $points;
+                    $totalCoef += $coef;
+                    $type = str_contains(strtolower($matiere['matiere']), 'projet') ? 'R' : 'L';
+                @endphp
                 <tr>
-                    <td colspan="4" style="text-align: center; padding: 20px; color: #999;">
-                        Aucune note disponible pour cette période
-                    </td>
+                    <td>{{ $matiere['matiere'] ?? 'N/A' }}</td>
+                    <td>{{ $type }}</td>
+                    <td>{{ number_format($note, 2) }}</td>
+                    <td>{{ $coef }}</td>
+                    <td>{{ number_format($points, 2) }}</td>
                 </tr>
-            @endif
-        </tbody>
-        <tfoot>
+            @endforeach
             <tr class="total-row">
-                <td colspan="2" style="text-align: left;">
-                    <strong>MOYENNE GÉNÉRALE</strong>
-                </td>
-                <td style="text-align: center; font-size: 14px;">
-                    <strong>{{ number_format($bulletin->moyenne_generale ?? 0, 2) }}/20</strong>
-                </td>
-                <td style="text-align: center;">
-                    <strong>Rang : {{ $bulletin->rang ?? '-' }}/{{ $bulletin->total_classe ?? '-' }}</strong>
-                </td>
+                <td colspan="4" style="text-align:right;">Moyenne Générale /20</td>
+                <td>{{ number_format($bulletin->moyenne_generale, 2) }}</td>
             </tr>
-        </tfoot>
+        </tbody>
     </table>
 
-    <!-- Appréciation générale -->
-    @if($bulletin->appreciation_generale)
-        <div class="appreciation-section">
-            <h3>📝 Appréciation Générale</h3>
-            <p style="margin: 0; line-height: 1.6;">{{ $bulletin->appreciation_generale }}</p>
-        </div>
-    @endif
+    <!-- ===== RÉSUMÉ ===== -->
+    <table class="summary-table">
+        <tr>
+            <td><strong>Moyenne générale :</strong> {{ number_format($bulletin->moyenne_generale, 2) }}/20</td>
+            <td><strong>Classement :</strong> {{ $bulletin->rang }}{{ $bulletin->rang == 1 ? 'er' : 'ème' }} / {{ $bulletin->total_classe }}</td>
+            <td><strong>Décision du jury :</strong>
+                @if ($bulletin->moyenne_generale >= 10)
+                    <span style="color:#10b981;font-weight:bold;">Admis(e)</span>
+                @else
+                    <span style="color:#ef4444;font-weight:bold;">redoublant(e)</span>
+                @endif
+            </td>
+        </tr>
+    </table>
 
-    <!-- Pied de page -->
-    <div class="footer">
-        <p>Document généré automatiquement le {{ now()->format('d/m/Y à H:i') }}</p>
-        <p>Ce document est certifié conforme par l'administration</p>
+    <!-- ===== APPRÉCIATION ===== -->
+    <div class="appreciation">
+        <strong>📝 Appréciation Générale :</strong><br>
+        {{ $bulletin->appreciation_generale ?? 'Aucune appréciation disponible.' }}
     </div>
+
+    <!-- ===== SIGNATURES ===== -->
+    <div class="signatures">
+        <div class="col left">
+            <span>Directeur d’Établissement</span>
+        </div>
+        <div class="col right">
+            <span>Chef de Pôle Pédagogique</span>
+        </div>
+    </div>
+
+    <!-- ===== FOOTER ===== -->
+    <div class="footer">
+        Fait à Conakry, le {{ now()->format('d/m/Y') }} — Document généré automatiquement.<br>
+        Ce bulletin est un document officiel. Toute falsification est passible de sanctions disciplinaires.
+    </div>
+
 </body>
 </html>
