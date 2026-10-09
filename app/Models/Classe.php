@@ -38,6 +38,12 @@ class Classe extends Model
         return $this->belongsTo(AnneeScolaire::class);
     }
 
+    /** Inscriptions annuelles dans cette classe */
+    public function inscriptions()
+    {
+        return $this->hasMany(Inscription::class);
+    }
+
     public function stagiaires()
     {
         return $this->hasMany(Stagiaire::class);

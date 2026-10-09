@@ -5,7 +5,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        <title>{{ config('app.name', 'Laravel') }}</title>
+        <title>{{ \App\Support\Etablissement::get('nom') }}</title>
 
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.bunny.net">
@@ -44,7 +44,7 @@
 
                 <!-- Footer -->
                 <div class="mt-8 text-center text-sm text-gray-600">
-                    <p>&copy; {{ date('Y') }} EMSI. Tous droits réservés.</p>
+                    <p>&copy; {{ date('Y') }} {{ \App\Support\Etablissement::get('nom') }}. Tous droits réservés.</p>
                 </div>
             </div>
         </div>

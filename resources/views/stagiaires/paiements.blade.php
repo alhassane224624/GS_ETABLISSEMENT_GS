@@ -1,74 +1,61 @@
 @extends('layouts.app-stagiaire')
 
-@section('title', 'Mes Paiements')
+@section('title', 'Mes paiements')
 
 @section('content')
+@php $dh = fn ($m) => number_format((float) $m, 2, ',', ' ') . ' DH'; @endphp
+
 <div class="container py-4">
-    <h2 class="mb-4 text-primary fw-bold">💳 Mes Paiements</h2>
+    <h4 class="mb-4"><i class="fas fa-wallet text-primary me-2"></i>Mes paiements</h4>
 
-    <div class="card shadow-sm mb-4">
-        <div class="card-body">
-            <p><strong>Total payé :</strong> {{ number_format($stagiaire->total_paye, 2) }} DH</p>
-            <p><strong>Montant restant :</strong> {{ number_format($stagiaire->solde_restant, 2) }} DH</p>
-            <p><strong>Statut :</strong> 
-                <span class="badge bg-{{ $stagiaire->statut_paiement === 'a_jour' ? 'success' : ($stagiaire->statut_paiement === 'en_retard' ? 'danger' : 'warning') }}">
-                    {{ ucfirst(str_replace('_', ' ', $stagiaire->statut_paiement)) }}
-                </span>
-            </p>
+    <div class="row g-3 mb-4">
+        <div class="col-md-3"><div class="card shadow-sm h-100"><div class="card-body"><small class="text-muted">Total à payer</small><div class="fs-4 fw-bold">{{ $dh($stats['total_a_payer']) }}</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm h-100"><div class="card-body"><small class="text-muted">Déjà réglé</small><div class="fs-4 fw-bold text-success">{{ $dh($stats['total_paye']) }}</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm h-100"><div class="card-body"><small class="text-muted">Reste à payer</small><div class="fs-4 fw-bold {{ $stats['solde_restant'] > 0 ? 'text-danger' : 'text-success' }}">{{ $dh($stats['solde_restant']) }}</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm h-100"><div class="card-body"><small class="text-muted">En cours d'encaissement</small><div class="fs-4 fw-bold text-warning">{{ $dh($stats['en_attente']) }}</div></div></div></div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <span class="fw-semibold">Historique</span>
+            <a href="{{ route('stagiaire.echeanciers') }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-calendar-alt me-1"></i>Mes échéances</a>
         </div>
-    </div>
-
-    <div class="table-responsive shadow-sm">
-        <table class="table table-striped align-middle">
-            <thead class="table-light">
-                <tr>
-                    <th>#</th>
-                    <th>Date</th>
-                    <th>Montant</th>
-                    <th>Méthode</th>
-                    <th>Statut</th>
-                    <th>Reçu</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse ($paiements as $paiement)
-                    <tr>
-                        <td>{{ $loop->iteration }}</td>
-                        <td>{{ $paiement->date_paiement->format('d/m/Y') }}</td>
-                        <td>{{ number_format($paiement->montant, 2) }} DH</td>
-                        <td>{{ $paiement->methode_paiement ?? '-' }}</td>
-                        <td>
-                            @php
-                                $color = match($paiement->statut) {
-                                    'valide' => 'success',
-                                    'refuse' => 'danger',
-                                    'en_attente' => 'warning',
-                                    default => 'secondary',
-                                };
-                            @endphp
-                            <span class="badge bg-{{ $color }}">{{ ucfirst($paiement->statut) }}</span>
-                        </td>
-                        <td>
-                            @if($paiement->statut === 'valide')
-                                <a href="{{ route('stagiaire.paiement.recu', $paiement->id) }}" class="btn btn-sm btn-outline-primary">
-                                    <i class="bi bi-file-earmark-pdf"></i> Reçu
-                                </a>
-                            @else
-                                <span class="text-muted">-</span>
-                            @endif
-                        </td>
-                    </tr>
-                @empty
-                    <tr>
-                        <td colspan="6" class="text-center text-muted">Aucun paiement trouvé.</td>
-                    </tr>
-                @endforelse
-            </tbody>
-        </table>
-    </div>
-
-    <div class="d-flex justify-content-center mt-3">
-        {{ $paiements->links() }}
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead class="table-light">
+                    <tr><th>N°</th><th>Date</th><th>Mode</th><th>Échéances réglées</th><th class="text-end">Montant</th><th>Statut</th><th></th></tr>
+                </thead>
+                <tbody>
+                    @forelse ($paiements as $paiement)
+                        <tr>
+                            <td class="small">{{ $paiement->numero_transaction }}</td>
+                            <td>{{ $paiement->date_paiement->format('d/m/Y') }}</td>
+                            <td>{{ $paiement->methode_libelle }}</td>
+                            <td class="small">{{ $paiement->echeanciers->pluck('titre')->implode(', ') ?: '—' }}</td>
+                            <td class="text-end fw-semibold">{{ $dh($paiement->montant) }}</td>
+                            <td>
+                                <span class="badge bg-{{ $paiement->statut_couleur }}">{{ $paiement->statut_libelle }}</span>
+                                @if ($paiement->statut === 'refuse' && $paiement->notes_admin)
+                                    <div class="small text-danger">{{ $paiement->notes_admin }}</div>
+                                @endif
+                            </td>
+                            <td class="text-end">
+                                @if ($paiement->statut === 'valide')
+                                    <a href="{{ route('stagiaire.paiement.recu', $paiement) }}" class="btn btn-sm btn-outline-success" target="_blank">
+                                        <i class="fas fa-file-pdf me-1"></i>Reçu
+                                    </a>
+                                @endif
+                            </td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="7" class="text-center text-muted py-4">Aucun paiement pour le moment.</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+        @if ($paiements->hasPages())
+            <div class="card-footer bg-white">{{ $paiements->links() }}</div>
+        @endif
     </div>
 </div>
 @endsection

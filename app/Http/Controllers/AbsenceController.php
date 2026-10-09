@@ -70,7 +70,13 @@ class AbsenceController extends Controller
             'document_justificatif' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048'
         ]);
 
-        $data = $request->all();
+        if (Absence::chevauche((int) $request->stagiaire_id, $request->date, $request->type, $request->heure_debut, $request->heure_fin)) {
+            return back()->withInput()->with('error', 'Une absence couvrant ce créneau est déjà enregistrée pour cette date.');
+        }
+
+        $data = $request->only(['stagiaire_id', 'date', 'type', 'heure_debut', 'heure_fin', 'motif']);
+        $data['justifiee'] = $request->boolean('justifiee');
+        $data['periode_id'] = Absence::periodePourDate($request->date);
         $data['created_by'] = Auth::id();
 
         if ($request->hasFile('document_justificatif')) {

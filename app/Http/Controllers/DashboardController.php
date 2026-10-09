@@ -220,6 +220,7 @@ class DashboardController extends Controller
             'recent_notes' => $recent_notes,
         ];
 
-        return view('dashboard.stagiaire', compact('data'));
+        // L'espace stagiaire est géré par StagiaireSpaceController
+        return redirect()->route('stagiaire.dashboard');
     }
 }

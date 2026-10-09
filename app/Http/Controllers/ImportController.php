@@ -25,24 +25,29 @@ class ImportController extends Controller
     public function importStagiaires(Request $request)
     {
         $request->validate([
-            'file' => 'required|mimes:xlsx,csv,xls|max:2048',
+            'file' => 'required|mimes:xlsx,csv,xls|max:5120',
             'filiere_id' => 'nullable|exists:filieres,id'
         ]);
 
         try {
-            $import = new StagiairesImport($request->filiere_id);
+            $import = new StagiairesImport($request->filiere_id ? (int) $request->filiere_id : null);
             Excel::import($import, $request->file('file'));
-
-            $results = $import->getResults();
-
-            return redirect()->route('stagiaires.index')->with([
-                'success' => "Import terminé! {$results['success']} stagiaires importés avec succès.",
-                'import_errors' => $results['errors']
-            ]);
-
-        } catch (\Exception $e) {
-            return back()->with('error', 'Erreur lors de l\'import: ' . $e->getMessage());
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Erreur lors de l\'import : ' . $e->getMessage());
         }
+
+        // Rapport CSV : identifiants des comptes créés + lignes en erreur
+        $nom = 'rapport_import_' . now()->format('Y-m-d_H-i') . '.csv';
+
+        return response()->streamDownload(function () use ($import) {
+            $out = fopen('php://output', 'w');
+            fwrite($out, "\xEF\xBB\xBF"); // BOM pour Excel
+            fputcsv($out, ['Ligne', 'Nom', 'Prénom', 'E-mail', 'Matricule', 'Mot de passe provisoire', 'Statut'], ';');
+            foreach ($import->getRapport() as $ligne) {
+                fputcsv($out, $ligne, ';');
+            }
+            fclose($out);
+        }, $nom, ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
     public function downloadTemplate()
@@ -52,9 +57,9 @@ class ImportController extends Controller
             'Content-Disposition' => 'attachment; filename=template_stagiaires.csv'
         ];
 
-        $template = "nom,prenom,matricule,filiere_nom\n";
-        $template .= "DUPONT,Jean,ST001,Informatique\n";
-        $template .= "MARTIN,Marie,ST002,Gestion\n";
+        $template = "nom,prenom,email,telephone,matricule,filiere_nom\n";
+        $template .= "DUPONT,Jean,jean.dupont@exemple.com,0600000000,,Informatique\n";
+        $template .= "MARTIN,Marie,marie.martin@exemple.com,0611111111,,Gestion\n";
 
         return response($template, 200, $headers);
     }

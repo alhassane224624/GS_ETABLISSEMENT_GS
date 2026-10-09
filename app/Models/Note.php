@@ -119,4 +119,25 @@ class Note extends Model
     {
         return $this->note_sur_20 >= 10;
     }
+
+    /**
+     * Le bulletin du stagiaire pour cette période est-il validé ?
+     * Si oui, ses notes de la période ne doivent plus bouger.
+     */
+    public static function periodeVerrouillee($stagiaireId, $periodeId): bool
+    {
+        if (!$stagiaireId || !$periodeId) {
+            return false;
+        }
+
+        return Bulletin::where('stagiaire_id', $stagiaireId)
+            ->where('periode_id', $periodeId)
+            ->whereNotNull('validated_at')
+            ->exists();
+    }
+
+    public function estVerrouillee(): bool
+    {
+        return self::periodeVerrouillee($this->stagiaire_id, $this->periode_id);
+    }
 }

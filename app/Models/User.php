@@ -21,6 +21,9 @@ class User extends Authenticatable
         'specialite',
         'bio',
         'telephone',
+        'mode_remuneration',
+        'taux_horaire',
+        'salaire_fixe',
         // 'email_verified_at' retiré du fillable (géré automatiquement)
     ];
 
@@ -454,5 +457,22 @@ class User extends Authenticatable
     public function scopeFinancialAccess($query)
     {
         return $query->whereIn('role', ['administrateur', 'comptable']);
+    }
+
+    public function isParent(): bool
+    {
+        return $this->role === 'parent';
+    }
+
+    /** Parent : ses enfants / pupilles */
+    public function enfants()
+    {
+        return $this->belongsToMany(Stagiaire::class, 'parent_stagiaire', 'user_id', 'stagiaire_id')
+            ->withPivot('lien')->withTimestamps();
+    }
+
+    public function salaires()
+    {
+        return $this->hasMany(Salaire::class, 'professeur_id');
     }
 }

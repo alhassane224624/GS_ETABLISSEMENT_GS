@@ -139,7 +139,7 @@
                                         <span class="text-muted">-</span>
                                     @endif
                                 </td>
-                                <td>{{ $absence->creator->name }}</td>
+                                <td>{{ $absence->creator->name ?? 'Utilisateur supprimé' }}</td>
                                 <td>
                                     <div class="btn-group" role="group">
                                         <a href="{{ route('absences.show', $absence) }}" class="btn btn-sm btn-info" title="Voir">

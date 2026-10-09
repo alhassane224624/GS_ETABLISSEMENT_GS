@@ -14,6 +14,7 @@ class Planning extends Model
         'salle_id',
         'matiere_id',
         'classe_id',
+        'creneau_id',
         'date',
         'heure_debut',
         'heure_fin',
@@ -24,14 +25,30 @@ class Planning extends Model
         'validated_at',
         'statut',
         'motif_annulation',
+        'appel_fait_at',
+        'contenu_seance',
+        'devoirs',
+        'devoirs_pour',
     ];
 
     protected $casts = [
         'date' => 'date',
         'validated_at' => 'datetime',
+        'appel_fait_at' => 'datetime',
+        'devoirs_pour' => 'date',
     ];
 
     // Relations
+    public function absences()
+    {
+        return $this->hasMany(Absence::class);
+    }
+
+    public function creneau()
+    {
+        return $this->belongsTo(Creneau::class);
+    }
+
     public function professeur()
     {
         return $this->belongsTo(User::class, 'professeur_id');

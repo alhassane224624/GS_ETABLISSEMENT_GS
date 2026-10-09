@@ -10,6 +10,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+use App\Services\StagiaireService;
 
 // Notifications
 use App\Notifications\AccountActivated;
@@ -75,14 +78,44 @@ class UserController extends Controller
             'bio' => 'nullable|string|max:1000',
             'telephone' => 'nullable|string|max:20',
             'is_active' => 'boolean',
-            'filiere_id' => 'nullable|exists:filieres,id',
+            'filiere_id' => 'nullable|required_if:role,stagiaire|exists:filieres,id',
             'classe_id' => 'nullable|exists:classes,id',
             'niveau_id' => 'nullable|exists:niveaux,id',
             'filieres' => 'nullable|array',
             'filieres.*' => 'exists:filieres,id',
             'matieres' => 'nullable|array',
             'matieres.*' => 'exists:matieres,id',
+        ], [
+            'filiere_id.required_if' => 'La filière est obligatoire pour un stagiaire.',
         ]);
+
+        // Un stagiaire est créé par le même service que la fiche stagiaire
+        // (capacité de classe, cohérence filière/classe, matricule, échéance d'inscription)
+        if ($validated['role'] === 'stagiaire') {
+            $parts = preg_split('/\s+/', trim($validated['name']));
+            $nom = $parts[0] ?? $validated['name'];
+            $prenom = isset($parts[1]) ? implode(' ', array_slice($parts, 1)) : $nom;
+
+            $stagiaire = DB::transaction(function () use ($validated, $nom, $prenom) {
+                [$stagiaire] = app(StagiaireService::class)->creer([
+                    'nom'        => $nom,
+                    'prenom'     => $prenom,
+                    'email'      => $validated['email'],
+                    'telephone'  => $validated['telephone'] ?? null,
+                    'filiere_id' => $validated['filiere_id'],
+                    'classe_id'  => $validated['classe_id'] ?? null,
+                    'niveau_id'  => $validated['niveau_id'] ?? null,
+                ], Auth::id(), (bool) ($validated['is_active'] ?? true));
+
+                // Mot de passe choisi par l'administrateur
+                $stagiaire->user->update(['password' => Hash::make($validated['password'])]);
+
+                return $stagiaire;
+            });
+
+            return redirect()->route('stagiaires.show', $stagiaire)
+                ->with('success', "Stagiaire {$stagiaire->matricule} créé. Complétez sa fiche si besoin.");
+        }
 
         $user = User::create([
             'name' => $validated['name'],
@@ -95,32 +128,6 @@ class UserController extends Controller
             'is_active' => $validated['is_active'] ?? true,
             'created_by' => Auth::id(),
         ]);
-
-        // Si stagiaire, créer le profil
-        if ($user->role === 'stagiaire') {
-            $parts = preg_split('/\s+/', trim($user->name));
-            $nom = $parts[0] ?? $user->name;
-            $prenom = isset($parts[1]) ? implode(' ', array_slice($parts, 1)) : '';
-
-            $lastId = Stagiaire::max('id') + 1;
-            $year = now()->format('Y');
-            $matricule = sprintf("ST%s%05d", $year, $lastId);
-
-            Stagiaire::create([
-                'user_id' => $user->id,
-                'nom' => $nom,
-                'prenom' => $prenom,
-                'matricule' => $matricule,
-                'email' => $user->email,
-                'is_active' => $user->is_active,
-                'statut' => 'actif',
-                'date_inscription' => now(),
-                'filiere_id' => $request->input('filiere_id'),
-                'classe_id' => $request->input('classe_id'),
-                'niveau_id' => $request->input('niveau_id'),
-                'created_by' => Auth::id(),
-            ]);
-        }
 
         // Si professeur, assigner filières et matières
         if ($user->role === 'professeur') {
@@ -257,8 +264,27 @@ class UserController extends Controller
             return redirect()->back()->with('error', 'Vous ne pouvez pas supprimer votre propre compte.');
         }
 
+        // Stagiaire : mêmes règles que la fiche (bloqué s'il a des paiements ou des bulletins)
         if ($user->role === 'stagiaire' && $user->stagiaire) {
-            $user->stagiaire->delete();
+            try {
+                app(StagiaireService::class)->supprimer($user->stagiaire);
+            } catch (ValidationException $e) {
+                return back()->with('error', $e->validator->errors()->first() . ' Vous pouvez aussi désactiver le compte.');
+            }
+            return redirect()->route('users.index')->with('success', 'Stagiaire et compte supprimés.');
+        }
+
+        // Professeur : son planning et ses notes sont l'historique de l'établissement
+        if ($user->role === 'professeur'
+            && (\App\Models\Planning::where('professeur_id', $user->id)->exists()
+                || \App\Models\Note::where('created_by', $user->id)->exists())) {
+            return back()->with('error', 'Ce professeur a des séances ou des notes enregistrées : désactivez son compte au lieu de le supprimer.');
+        }
+
+        // Ne jamais supprimer le dernier administrateur actif
+        if ($user->role === 'administrateur'
+            && User::where('role', 'administrateur')->where('is_active', true)->where('id', '!=', $user->id)->doesntExist()) {
+            return back()->with('error', 'Impossible de supprimer le dernier administrateur actif.');
         }
 
         $user->delete();
@@ -269,6 +295,10 @@ class UserController extends Controller
     public function toggleActive(User $user)
     {
         $newStatus = !$user->is_active;
+
+        if (!$newStatus && $user->id === Auth::id()) {
+            return back()->with('error', 'Vous ne pouvez pas désactiver votre propre compte.');
+        }
 
         $user->update([
             'is_active' => $newStatus,

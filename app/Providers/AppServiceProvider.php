@@ -19,6 +19,9 @@ class AppServiceProvider extends ServiceProvider
         // Utiliser Bootstrap pour la pagination
         Paginator::useBootstrap();
 
+        // Dates en français (jours, mois) dans toute l'application
+        \Carbon\Carbon::setLocale(config('app.locale'));
+
         // Longueur par défaut des chaînes pour les anciennes versions MySQL
         Schema::defaultStringLength(191);
 

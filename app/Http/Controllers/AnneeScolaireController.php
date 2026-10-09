@@ -130,8 +130,15 @@ class AnneeScolaireController extends Controller
         // Activer cette année
         $anneeScolaire->update(['is_active' => true]);
 
-        return redirect()->back()
-                        ->with('success', "Année {$anneeScolaire->nom} activée avec succès.");
+        // Chaque stagiaire passe dans sa classe de la nouvelle année (inscriptions)
+        $r = app(\App\Services\InscriptionService::class)->synchroniserAnneeActive($anneeScolaire);
+
+        $message = "Année {$anneeScolaire->nom} activée : {$r['bascules']} stagiaire(s) placé(s) dans leur classe de l'année.";
+        if ($r['sans_inscription'] > 0) {
+            $message .= " {$r['sans_inscription']} stagiaire(s) actif(s) ne sont pas inscrits pour cette année (voir Inscriptions).";
+        }
+
+        return redirect()->back()->with('success', $message);
     }
 
     public function duplicate($annees_scolaire)

@@ -271,6 +271,55 @@
                 </div>
             </div>
 
+            <!-- Documents administratifs -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white fw-semibold d-flex justify-content-between">
+                    <span><i class="fas fa-file-signature me-2 text-primary"></i>Documents administratifs</span>
+                    <a href="{{ route('documents.index', ['search' => $stagiaire->matricule]) }}" class="small">Déjà délivrés</a>
+                </div>
+                <div class="card-body d-flex flex-wrap gap-2">
+                    @foreach (\App\Models\DocumentDelivre::TYPES as $type => $libelle)
+                        <form method="POST" action="{{ route('documents.delivrer', $stagiaire) }}">
+                            @csrf
+                            <input type="hidden" name="type" value="{{ $type }}">
+                            <button class="btn btn-outline-primary btn-sm"><i class="fas fa-{{ $type === 'carte' ? 'id-card' : 'file-pdf' }} me-1"></i>{{ $libelle }}</button>
+                        </form>
+                    @endforeach
+                    <small class="text-muted w-100">Chaque document reçoit un numéro et un code de vérification, et il est enregistré dans le registre.</small>
+                </div>
+            </div>
+
+            <!-- Historique de scolarité (inscriptions annuelles) -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white fw-semibold"><i class="fas fa-history me-2 text-primary"></i>Parcours scolaire</div>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead class="table-light">
+                            <tr><th>Année</th><th>Classe</th><th>Niveau</th><th class="text-center">Moyenne</th><th>Décision</th></tr>
+                        </thead>
+                        <tbody>
+                            @forelse ($stagiaire->inscriptions as $insc)
+                                <tr>
+                                    <td>{{ $insc->anneeScolaire->nom ?? '—' }} @if (optional($insc->anneeScolaire)->is_active)<span class="badge bg-primary">en cours</span>@endif</td>
+                                    <td>{{ $insc->classe->nom ?? '—' }}</td>
+                                    <td>{{ $insc->niveau->nom ?? '—' }}</td>
+                                    <td class="text-center">{{ $insc->moyenne_annuelle !== null ? number_format($insc->moyenne_annuelle, 2, ',', ' ') : '—' }}</td>
+                                    <td>
+                                        @if ($insc->statut === 'abandon')
+                                            <span class="badge bg-secondary">Abandon</span>
+                                        @else
+                                            <span class="badge bg-{{ $insc->decision_couleur }}">{{ $insc->decision_libelle }}</span>
+                                        @endif
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr><td colspan="5" class="text-center text-muted py-3">Aucune inscription enregistrée.</td></tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <!-- Bandeau d'aide -->
             <div class="help-banner">
                 <div class="d-flex align-items-start gap-3">

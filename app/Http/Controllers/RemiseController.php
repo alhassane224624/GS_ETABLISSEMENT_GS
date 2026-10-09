@@ -2,21 +2,23 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Echeancier;
 use App\Models\Remise;
 use App\Models\Stagiaire;
+use App\Services\RemiseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 
-// ============================================================================
-// REMISE CONTROLLER
-// ============================================================================
-
+/**
+ * Une remise n'est plus un simple enregistrement : à chaque création, modification,
+ * activation ou suppression, elle est (ré)appliquée sur les échéances du stagiaire.
+ */
 class RemiseController extends Controller
 {
-    public function __construct()
+    public function __construct(private RemiseService $service)
     {
         $this->middleware('auth');
-        // ✅ MODIFIÉ - Accès admin ET comptable
         $this->middleware(function ($request, $next) {
             if (!auth()->user()->hasFinancialAccess()) {
                 abort(403, 'Accès réservé aux comptables et administrateurs');
@@ -25,164 +27,115 @@ class RemiseController extends Controller
         });
     }
 
-    /**
-     * Liste des remises
-     */
     public function index(Request $request)
     {
-        $query = Remise::with(['stagiaire.filiere', 'createur']);
-
-        if ($request->filled('stagiaire_id')) {
-            $query->where('stagiaire_id', $request->stagiaire_id);
-        }
-
-        if ($request->filled('type')) {
-            $query->where('type', $request->type);
-        }
-
-        if ($request->filled('is_active')) {
-            $query->where('is_active', $request->boolean('is_active'));
-        }
-
-        $remises = $query->latest()->paginate(15);
+        $remises = Remise::with(['stagiaire.filiere', 'createur'])
+            ->when($request->filled('stagiaire_id'), fn ($q) => $q->where('stagiaire_id', $request->stagiaire_id))
+            ->when($request->filled('type'), fn ($q) => $q->where('type', $request->type))
+            ->when($request->filled('is_active'), fn ($q) => $q->where('is_active', $request->boolean('is_active')))
+            ->latest()
+            ->paginate(15)
+            ->withQueryString();
 
         $stats = [
-            'total_remises' => Remise::count(),
-            'remises_actives' => Remise::where('is_active', true)->count(),
-            'montant_total_remises' => Remise::where('is_active', true)
-                ->where('type', 'montant_fixe')
-                ->sum('valeur'),
+            'total_remises'         => Remise::count(),
+            'remises_actives'       => Remise::where('is_active', true)->count(),
+            // Montant réellement accordé, tous types confondus (et non la somme des « valeurs » % + DH)
+            'montant_total_remises' => Echeancier::sum('montant_remise'),
         ];
 
         return view('remises.index', compact('remises', 'stats'));
     }
 
-    /**
-     * Formulaire de création
-     */
     public function create(Request $request)
     {
-        $stagiaireId = $request->input('stagiaire_id');
-        $stagiaire = $stagiaireId ? Stagiaire::findOrFail($stagiaireId) : null;
-        
-        $stagiaires = Stagiaire::actifs()
-            ->with('filiere')
-            ->orderBy('nom')
-            ->get();
+        $stagiaire = $request->filled('stagiaire_id') ? Stagiaire::findOrFail($request->stagiaire_id) : null;
+        $stagiaires = Stagiaire::actifs()->with('filiere')->orderBy('nom')->get();
 
         return view('remises.create', compact('stagiaires', 'stagiaire'));
     }
 
-    /**
-     * Enregistrer une remise
-     */
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'stagiaire_id' => 'required|exists:stagiaires,id',
-            'titre' => 'required|string|max:255',
-            'type' => 'required|in:pourcentage,montant_fixe',
-            'valeur' => 'required|numeric|min:0',
-            'motif' => 'required|string|max:1000',
-            'date_debut' => 'required|date',
-            'date_fin' => 'nullable|date|after:date_debut',
-            'is_active' => 'boolean',
-        ]);
+        $validated = $this->valider($request, true);
 
-        // Validation supplémentaire pour pourcentage
-        if ($validated['type'] === 'pourcentage' && $validated['valeur'] > 100) {
-            return back()->withErrors(['valeur' => 'Le pourcentage ne peut pas dépasser 100%'])->withInput();
-        }
-
-        $remise = Remise::create([
-            'stagiaire_id' => $validated['stagiaire_id'],
+        $remise = Remise::create($validated + [
             'created_by' => Auth::id(),
-            'titre' => $validated['titre'],
-            'type' => $validated['type'],
-            'valeur' => $validated['valeur'],
-            'motif' => $validated['motif'],
-            'date_debut' => $validated['date_debut'],
-            'date_fin' => $validated['date_fin'] ?? null,
-            'is_active' => $validated['is_active'] ?? true,
+            'is_active'  => $request->boolean('is_active'),
         ]);
 
-        return redirect()->route('remises.index')
-            ->with('success', 'Remise créée avec succès.');
+        $this->service->appliquer($remise->stagiaire);
+
+        return redirect()->route('remises.show', $remise)
+            ->with('success', 'Remise créée et appliquée aux échéances concernées.');
     }
 
-    /**
-     * Afficher une remise
-     */
     public function show(Remise $remise)
     {
         $remise->load(['stagiaire.filiere', 'stagiaire.classe', 'createur']);
 
-        return view('remises.show', compact('remise'));
+        // Échéances effectivement concernées par cette remise
+        $echeances = Echeancier::where('stagiaire_id', $remise->stagiaire_id)->orderBy('date_echeance')->get()
+            ->filter(fn ($e) => $remise->concerne($e));
+
+        return view('remises.show', compact('remise', 'echeances'));
     }
 
-    /**
-     * Formulaire de modification
-     */
     public function edit(Remise $remise)
     {
-        $stagiaires = Stagiaire::actifs()
-            ->with('filiere')
-            ->orderBy('nom')
-            ->get();
-
+        $stagiaires = Stagiaire::actifs()->with('filiere')->orderBy('nom')->get();
         return view('remises.edit', compact('remise', 'stagiaires'));
     }
 
-    /**
-     * Mettre à jour une remise
-     */
     public function update(Request $request, Remise $remise)
     {
-        $validated = $request->validate([
-            'titre' => 'required|string|max:255',
-            'type' => 'required|in:pourcentage,montant_fixe',
-            'valeur' => 'required|numeric|min:0',
-            'motif' => 'required|string|max:1000',
-            'date_debut' => 'required|date',
-            'date_fin' => 'nullable|date|after:date_debut',
-            'is_active' => 'boolean',
-        ]);
+        $validated = $this->valider($request, false);
 
-        // Validation supplémentaire pour pourcentage
-        if ($validated['type'] === 'pourcentage' && $validated['valeur'] > 100) {
-            return back()->withErrors(['valeur' => 'Le pourcentage ne peut pas dépasser 100%'])->withInput();
-        }
+        $remise->update($validated + ['is_active' => $request->boolean('is_active')]);
+        $this->service->appliquer($remise->stagiaire);
 
-        $remise->update($validated);
-
-        return redirect()->route('remises.index')
-            ->with('success', 'Remise mise à jour avec succès.');
+        return redirect()->route('remises.show', $remise)
+            ->with('success', 'Remise mise à jour et réappliquée.');
     }
 
-    /**
-     * Supprimer une remise
-     */
     public function destroy(Remise $remise)
     {
+        $stagiaire = $remise->stagiaire;
         $remise->delete();
+        $this->service->appliquer($stagiaire);
 
         return redirect()->route('remises.index')
-            ->with('success', 'Remise supprimée avec succès.');
+            ->with('success', 'Remise supprimée : les échéances non soldées retrouvent leur montant normal.');
     }
 
-    /**
-     * Activer/Désactiver une remise
-     */
     public function toggleActive(Remise $remise)
     {
-        $remise->update([
-            'is_active' => !$remise->is_active
+        $remise->update(['is_active' => !$remise->is_active]);
+        $this->service->appliquer($remise->stagiaire);
+
+        return back()->with('success', 'Remise ' . ($remise->is_active ? 'activée' : 'désactivée') . ' et échéances recalculées.');
+    }
+
+    private function valider(Request $request, bool $creation): array
+    {
+        $regles = [
+            'titre'      => 'required|string|max:255',
+            'type'       => 'required|in:pourcentage,montant_fixe',
+            'valeur'     => ['required', 'numeric', 'min:0.01', $request->input('type') === 'pourcentage' ? 'max:100' : 'max:1000000'],
+            'porte'      => ['nullable', Rule::in(array_keys(Remise::PORTEES))],
+            'motif'      => 'required|string|max:1000',
+            'date_debut' => 'required|date',
+            'date_fin'   => 'nullable|date|after_or_equal:date_debut',
+        ];
+        if ($creation) {
+            $regles['stagiaire_id'] = 'required|exists:stagiaires,id';
+        }
+
+        $validated = $request->validate($regles, [
+            'valeur.max' => 'Un pourcentage ne peut pas dépasser 100 %.',
         ]);
+        $validated['porte'] = $validated['porte'] ?? 'mensualite';
 
-        $status = $remise->is_active ? 'activée' : 'désactivée';
-
-        return redirect()->back()
-            ->with('success', "Remise {$status} avec succès.");
+        return $validated;
     }
 }
-

@@ -222,7 +222,7 @@
                                     <i class="fas fa-eye"></i>
                                 </a>
                                 
-                                @if($paiement->statut === 'valide' && $paiement->recu_path)
+                                @if($paiement->statut === 'valide')
                                     <a href="{{ route('paiements.recu', $paiement) }}" 
                                        class="btn btn-outline-success" 
                                        title="Télécharger reçu"
@@ -310,7 +310,7 @@
                                 <br><small class="text-danger">{{ $echeancier->date_echeance->diffForHumans() }}</small>
                             @endif
                         </td>
-                        <td class="text-end">{{ number_format($echeancier->montant, 2) }} DH</td>
+                        <td class="text-end">{{ number_format($echeancier->montant_net, 2) }} DH @if($echeancier->montant_remise > 0)<br><small class="text-muted">remise {{ number_format($echeancier->montant_remise, 2) }}</small>@endif</td>
                         <td class="text-end text-success">{{ number_format($echeancier->montant_paye, 2) }} DH</td>
                         <td class="text-end">
                             <strong class="{{ $echeancier->montant_restant > 0 ? 'text-danger' : 'text-success' }}">

@@ -18,7 +18,7 @@
                     </p>
                 </div>
                 <div class="d-flex gap-2">
-                    @if($paiement->statut === 'valide' && $paiement->recu_path)
+                    @if($paiement->statut === 'valide')
                         <a href="{{ route('paiements.recu', $paiement) }}" 
                            class="btn btn-success" 
                            target="_blank">
@@ -57,9 +57,24 @@
                                 <span class="badge bg-danger px-4 py-3 fs-6">
                                     <i class="fas fa-times-circle me-2"></i>{{ $paiement->statut_libelle }}
                                 </span>
+                            @else
+                                <span class="badge bg-secondary px-4 py-3 fs-6">
+                                    <i class="fas fa-ban me-2"></i>{{ $paiement->statut_libelle }}
+                                </span>
                             @endif
                         </div>
                     </div>
+
+                    @if($paiement->statut === 'en_attente')
+                        <div class="alert alert-warning border-0 mt-3 mb-0">
+                            <i class="fas fa-hourglass-half me-2"></i>
+                            En attente d'encaissement : <strong>aucune échéance n'est encore réglée</strong>. Validez quand le
+                            {{ mb_strtolower($paiement->methode_libelle) }} est effectivement encaissé.
+                            @if($echeancesCibles->isNotEmpty())
+                                <div class="small mt-1">Échéances visées : {{ $echeancesCibles->pluck('titre')->implode(', ') }}.</div>
+                            @endif
+                        </div>
+                    @endif
 
                     @if($paiement->valide_at)
                         <div class="alert alert-success border-0 mt-3 mb-0">
@@ -127,6 +142,9 @@
                                     <i class="fas fa-credit-card me-1"></i>Méthode de paiement
                                 </label>
                                 <strong>{{ $paiement->methode_libelle }}</strong>
+                                @if ($paiement->reference_externe)
+                                    <div class="small text-muted">Réf. {{ $paiement->reference_externe }}@if (!empty($paiement->metadata['banque'])) · {{ $paiement->metadata['banque'] }}@endif</div>
+                                @endif
                             </div>
                         </div>
 
@@ -174,7 +192,7 @@
                 <div class="card-header bg-light border-0">
                     <h5 class="mb-0 d-flex align-items-center">
                         <i class="fas fa-calendar-check text-success me-2"></i>
-                        Échéanciers Affectés
+                        Échéances réglées par ce paiement
                     </h5>
                 </div>
                 <div class="card-body p-0">
@@ -286,6 +304,18 @@
                 </div>
             </div>
 
+            <!-- Annulation d'un paiement validé (administrateur) -->
+            @if($paiement->statut === 'valide' && auth()->user()->isAdmin())
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body p-3">
+                    <button type="button" class="btn btn-outline-danger w-100" data-bs-toggle="modal" data-bs-target="#annulerModal">
+                        <i class="fas fa-undo me-2"></i>Annuler ce paiement
+                    </button>
+                    <small class="text-muted d-block mt-2">Erreur de saisie, chèque impayé… Les échéances réglées redeviennent dues. Le paiement reste dans l'historique.</small>
+                </div>
+            </div>
+            @endif
+
             <!-- Actions -->
             @if($paiement->statut === 'en_attente')
             <div class="card border-0 shadow-sm mb-4">
@@ -321,13 +351,43 @@
                     </h6>
                 </div>
                 <div class="card-body">
-                    <p class="mb-0 small">{{ $paiement->notes_admin }}</p>
+                    <p class="mb-0 small" style="white-space: pre-line;">{{ $paiement->notes_admin }}</p>
                 </div>
             </div>
             @endif
         </div>
     </div>
 </div>
+
+@if($paiement->statut === 'valide' && auth()->user()->isAdmin())
+<div class="modal fade" id="annulerModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ route('paiements.annuler', $paiement) }}">
+                @csrf
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title"><i class="fas fa-undo me-2"></i>Annuler le paiement {{ $paiement->numero_transaction }}</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Les {{ number_format($paiement->montant, 2, ',', ' ') }} DH seront retirés des échéances suivantes, qui redeviendront dues :</p>
+                    <ul class="small">
+                        @foreach($paiement->echeanciers as $ech)
+                            <li>{{ $ech->titre }} — {{ number_format($ech->pivot->montant_affecte, 2, ',', ' ') }} DH</li>
+                        @endforeach
+                    </ul>
+                    <label class="form-label">Motif de l'annulation *</label>
+                    <textarea name="motif_annulation" class="form-control" rows="3" required placeholder="Ex. chèque revenu impayé"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+                    <button type="submit" class="btn btn-danger">Confirmer l'annulation</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+@endif
 
 <!-- Modal Valider -->
 @if($paiement->statut === 'en_attente')
@@ -343,7 +403,7 @@
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <p>Confirmez-vous la validation de ce paiement ?</p>
+                    <p>Confirmez-vous que ce paiement a bien été <strong>encaissé</strong> ? Il sera imputé sur les échéances et le reçu deviendra disponible.</p>
                     
                     <div class="alert alert-info border-0">
                         <ul class="list-unstyled mb-0">

@@ -192,7 +192,7 @@
     <div class="container">
         {{-- En-tête --}}
         <div class="header">
-            <h1>{{ config('app.name') }}</h1>
+            <h1>{{ \App\Support\Etablissement::get('nom') }}</h1>
             <p>Établissement d'Enseignement Supérieur</p>
             <p>Tél: +212 XXX XXX XXX | Email: contact@emsi.ma</p>
         </div>

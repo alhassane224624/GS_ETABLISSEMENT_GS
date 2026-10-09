@@ -262,7 +262,7 @@
                                         <a href="{{ route('paiements.show', $paiement) }}" class="btn btn-outline-primary" title="Voir">
                                             <i class="fas fa-eye"></i>
                                         </a>
-                                        @if($paiement->statut === 'valide' && $paiement->recu_path)
+                                        @if($paiement->statut === 'valide')
                                             <a href="{{ route('paiements.recu', $paiement) }}" class="btn btn-outline-success" 
                                                title="Télécharger reçu" target="_blank">
                                                 <i class="fas fa-file-pdf"></i>

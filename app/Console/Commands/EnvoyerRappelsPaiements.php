@@ -2,159 +2,48 @@
 
 namespace App\Console\Commands;
 
+use App\Models\ConfigurationPaiement;
 use App\Models\Echeancier;
 use App\Notifications\RappelEcheanceNotification;
-use App\Notifications\RetardPaiementNotification;
 use Illuminate\Console\Command;
 
+/**
+ * Rappel UNIQUE avant chaque échéance non soldée (délai paramétrable : delai_rappel_echeance, 7 jours par défaut).
+ * Les retards sont notifiés par paiements:check-retards au moment où l'échéance passe en retard.
+ */
 class EnvoyerRappelsPaiements extends Command
 {
-    /**
-     * The name and signature of the console command.
-     */
-    protected $signature = 'paiements:rappels {--force : Forcer l\'envoi même si déjà envoyé}';
+    protected $signature = 'paiements:rappels {--force : Renvoyer même si un rappel a déjà été envoyé}';
+    protected $description = 'Envoie un rappel avant les échéances à venir';
 
-    /**
-     * The console command description.
-     */
-    protected $description = 'Envoie des rappels automatiques pour les échéances à venir et les retards';
-
-    /**
-     * Execute the console command.
-     */
     public function handle()
     {
-        $this->info('🔔 Démarrage de l\'envoi des rappels...');
+        $delai = (int) (ConfigurationPaiement::get('delai_rappel_echeance', 7) ?: 7);
 
-        // 1. Rappels pour échéances dans 7 jours
-        $this->envoyerRappelsEcheancesProches();
-
-        // 2. Rappels pour échéances dans 3 jours
-        $this->envoyerRappelsEcheancesUrgentes();
-
-        // 3. Notifications de retard
-        $this->envoyerNotificationsRetard();
-
-        // 4. Mettre à jour les statuts
-        $this->mettreAJourStatuts();
-
-        $this->info('✅ Envoi des rappels terminé avec succès !');
-    }
-
-    /**
-     * Envoie des rappels pour les échéances dans 7 jours
-     */
-    private function envoyerRappelsEcheancesProches()
-    {
-        $echeanciers = Echeancier::with('stagiaire.user')
-            ->where('statut', 'impaye')
-            ->whereBetween('date_echeance', [
-                now()->addDays(6),
-                now()->addDays(7)
-            ])
-            ->where(function($q) {
-                if (!$this->option('force')) {
-                    $q->where('notification_envoyee', false)
-                      ->orWhereNull('notification_sent_at');
-                }
-            })
+        $echeances = Echeancier::with('stagiaire.user')
+            ->where('montant_restant', '>', 0)
+            ->whereDate('date_echeance', '>=', now()->toDateString())
+            ->whereDate('date_echeance', '<=', now()->addDays($delai)->toDateString())
+            ->when(!$this->option('force'), fn ($q) => $q->where('notification_envoyee', false))
             ->get();
 
-        $count = 0;
-        foreach ($echeanciers as $echeancier) {
-            if ($echeancier->stagiaire->user) {
-                $echeancier->stagiaire->user->notify(
-                    new RappelEcheanceNotification($echeancier)
-                );
-
-                $echeancier->update([
-                    'notification_envoyee' => true,
-                    'notification_sent_at' => now(),
-                ]);
-
-                $count++;
+        $envoyes = 0;
+        foreach ($echeances as $echeance) {
+            $user = $echeance->stagiaire?->user;
+            if (!$user) {
+                continue;
+            }
+            try {
+                $user->notify(new RappelEcheanceNotification($echeance));
+                $echeance->update(['notification_envoyee' => true, 'notification_sent_at' => now()]);
+                $envoyes++;
+            } catch (\Throwable $e) {
+                report($e);
             }
         }
 
-        $this->line("📧 Rappels 7 jours : {$count} notifications envoyées");
-    }
+        $this->info("{$envoyes} rappel(s) envoyé(s) (échéances dans les {$delai} prochains jours).");
 
-    /**
-     * Envoie des rappels urgents pour les échéances dans 3 jours
-     */
-    private function envoyerRappelsEcheancesUrgentes()
-    {
-        $echeanciers = Echeancier::with('stagiaire.user')
-            ->where('statut', 'impaye')
-            ->whereBetween('date_echeance', [
-                now()->addDays(2),
-                now()->addDays(3)
-            ])
-            ->get();
-
-        $count = 0;
-        foreach ($echeanciers as $echeancier) {
-            if ($echeancier->stagiaire->user) {
-                $echeancier->stagiaire->user->notify(
-                    new RappelEcheanceNotification($echeancier)
-                );
-                $count++;
-            }
-        }
-
-        $this->line("⚠️  Rappels 3 jours : {$count} notifications envoyées");
-    }
-
-    /**
-     * Envoie des notifications pour les paiements en retard
-     */
-    private function envoyerNotificationsRetard()
-    {
-        $echeanciers = Echeancier::with('stagiaire.user')
-            ->whereIn('statut', ['impaye', 'paye_partiel'])
-            ->where('date_echeance', '<', now())
-            ->get();
-
-        // Mettre à jour le statut en retard
-        foreach ($echeanciers as $echeancier) {
-            $echeancier->update(['statut' => 'en_retard']);
-        }
-
-        // Notifier les retards de plus de 3 jours
-        $echeanciersRetard = $echeanciers->filter(function($e) {
-            return now()->diffInDays($e->date_echeance) >= 3;
-        });
-
-        $count = 0;
-        foreach ($echeanciersRetard as $echeancier) {
-            if ($echeancier->stagiaire->user) {
-                $echeancier->stagiaire->user->notify(
-                    new RetardPaiementNotification($echeancier)
-                );
-                $count++;
-            }
-        }
-
-        $this->line("🚨 Notifications retard : {$count} notifications envoyées");
-    }
-
-    /**
-     * Met à jour les statuts de paiement des stagiaires
-     */
-    private function mettreAJourStatuts()
-    {
-        $this->info('🔄 Mise à jour des statuts de paiement...');
-
-        $stagiaires = \App\Models\Stagiaire::actifs()
-            ->has('echeanciers')
-            ->get();
-
-        $count = 0;
-        foreach ($stagiaires as $stagiaire) {
-            $stagiaire->updateSoldePaiement();
-            $count++;
-        }
-
-        $this->line("✅ {$count} stagiaires mis à jour");
+        return Command::SUCCESS;
     }
 }

@@ -26,6 +26,16 @@ use App\Http\Controllers\EcheancierController;
 use App\Http\Controllers\RemiseController;
 use App\Http\Controllers\RapportFinancierController;
 use App\Http\Controllers\ComptableController;
+use App\Http\Controllers\BackupController;
+use App\Http\Controllers\ParametreController;
+use App\Http\Controllers\InscriptionController;
+use App\Http\Controllers\EmploiDuTempsController;
+use App\Http\Controllers\DocumentController;
+use App\Http\Controllers\SeanceController;
+use App\Http\Controllers\JustificationController;
+use App\Http\Controllers\ExamenController;
+use App\Http\Controllers\FinanceController;
+use App\Http\Controllers\ParentController;
 use Illuminate\Support\Facades\Route;
 
 // ============================================================================
@@ -48,15 +58,16 @@ require __DIR__ . '/auth.php';
 Route::get('/inscription-stagiaire', [StagiaireController::class, 'showInscriptionForm'])
     ->name('stagiaires.inscription.form');
 Route::post('/inscription-stagiaire', [StagiaireController::class, 'storeInscription'])
+    ->middleware('throttle:5,1')
     ->name('stagiaires.inscription.store');
 
 // ============================================================================
-// ROUTES AUTHENTIFIÃ‰ES
+// ROUTES AUTHENTIFIÉES
 // ============================================================================
 
 Route::middleware(['auth', 'verified'])->group(function () {
     
-    // âœ… REDIRECTION INTELLIGENTE SELON LE RÃ”LE
+    // ✅ REDIRECTION INTELLIGENTE SELON LE RÔLE
     Route::get('/dashboard', function () {
         $user = auth()->user();
         
@@ -69,7 +80,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             'comptable' => redirect('/comptable/dashboard'),
             'professeur' => redirect('/professeur/dashboard'),
             'stagiaire' => redirect('/stagiaire/dashboard'),
-            default => redirect()->route('login')->with('error', 'RÃ´le non reconnu'),
+            'parent' => redirect('/parent'),
+            default => redirect()->route('login')->with('error', 'Rôle non reconnu'),
         };
     })->name('dashboard');
 
@@ -121,7 +133,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 });
 
 // ============================================================================
-// âœ… ROUTES COMPTABLE
+// ✅ ROUTES COMPTABLE
 // ============================================================================
 
 Route::middleware(['auth', 'verified', 'financial'])->prefix('comptable')->name('comptable.')->group(function () {
@@ -142,10 +154,13 @@ Route::middleware(['auth', 'verified', 'stagiaire'])->prefix('stagiaire')->name(
     Route::get('/bulletin', [StagiaireSpaceController::class, 'monBulletin'])->name('bulletin');
     Route::get('/bulletin/{bulletin}/telecharger', [StagiaireSpaceController::class, 'telechargerBulletin'])->name('bulletin.telecharger');
     Route::get('/emploi-du-temps', [StagiaireSpaceController::class, 'emploiDuTemps'])->name('emploi-du-temps');
+    Route::get('/attestation', [DocumentController::class, 'monAttestation'])->name('attestation');
+    Route::get('/cahier-de-textes', [StagiaireSpaceController::class, 'cahierDeTextes'])->name('cahier-de-textes');
+    Route::post('/absences/{absence}/justifier', [JustificationController::class, 'deposer'])->name('absences.justifier');
     Route::get('/absences', [StagiaireSpaceController::class, 'mesAbsences'])->name('absences');
     Route::get('/profil', [StagiaireSpaceController::class, 'monProfil'])->name('profil');
     
-    // ðŸ’° PAIEMENTS STAGIAIRE
+    // 💰 PAIEMENTS STAGIAIRE
     Route::get('/mes-paiements', [PaiementController::class, 'mesPaiements'])->name('paiements');
     Route::get('/mes-echeanciers', [EcheancierController::class, 'mesEcheanciers'])->name('echeanciers');
     Route::get('/paiement/{paiement}/recu', [PaiementController::class, 'telechargerRecu'])->name('paiement.recu');
@@ -167,11 +182,16 @@ Route::middleware(['auth', 'verified', 'professeur'])->prefix('professeur')->nam
     Route::get('/stagiaires/export-pdf', [ProfesseurController::class, 'exportStagiairesPdf'])->name('stagiaires.export-pdf');
     Route::get('/stagiaires/export-excel', [ProfesseurController::class, 'exportStagiairesExcel'])->name('stagiaires.export-excel');
     
-    Route::get('stagiaires-export', [StagiaireController::class, 'export'])->name('stagiaires.export');
+    Route::get('stagiaires-export', [ProfesseurController::class, 'exportStagiairesExcel'])->name('stagiaires.export');
     Route::get('/presences', [ProfesseurController::class, 'presences'])->name('presences');
     Route::post('/presences/marquer', [ProfesseurController::class, 'marquerAbsence'])->name('presences.marquer');
     Route::delete('/presences/{absence}', [ProfesseurController::class, 'supprimerAbsence'])->name('presences.supprimer');
     Route::get('/planning', [ProfesseurController::class, 'monPlanning'])->name('planning');
+    Route::get('/seances/{planning}', [SeanceController::class, 'show'])->name('seance');
+    Route::get('/epreuves', [ExamenController::class, 'mesEpreuves'])->name('epreuves');
+    Route::get('/epreuves/{epreuve}/saisie', [ExamenController::class, 'saisie'])->name('epreuves.saisie');
+    Route::post('/epreuves/{epreuve}/saisie', [ExamenController::class, 'enregistrerSaisie'])->name('epreuves.saisie.store');
+    Route::post('/seances/{planning}', [SeanceController::class, 'enregistrer'])->name('seance.enregistrer');
     Route::get('/planning/create', [ProfesseurController::class, 'createPlanning'])->name('planning.create');
     Route::post('/planning', [ProfesseurController::class, 'storePlanning'])->name('planning.store');
 });
@@ -192,8 +212,9 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::resource('niveaux', NiveauController::class);
     Route::resource('matieres', MatiereController::class);
     
-    Route::resource('notes', NoteController::class);
+    // ⚠️ /notes/export doit être déclarée AVANT la ressource (sinon "export" est pris pour un {note})
     Route::get('/notes/export', [NoteController::class, 'export'])->name('notes.export');
+    Route::resource('notes', NoteController::class);
     Route::get('stagiaires/{stagiaire}/releve', [NoteController::class, 'releveStagiaire'])->name('notes.releve');
     
     Route::resource('salles', SalleController::class);
@@ -205,6 +226,8 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::post('planning/{planning}/valider', [PlanningController::class, 'valider'])->name('planning.valider');
     Route::post('planning/{planning}/annuler', [PlanningController::class, 'annuler'])->name('planning.annuler');
     
+    Route::get('absences/justifications', [JustificationController::class, 'index'])->name('absences.justifications');
+    Route::post('absences/{absence}/justification', [JustificationController::class, 'traiter'])->name('absences.justification.traiter');
     Route::resource('absences', AbsenceController::class);
     Route::get('absences-rapport', [AbsenceController::class, 'rapportAbsences'])->name('absences.rapport');
     Route::get('absences-export', [AbsenceController::class, 'exportAbsences'])->name('absences.export');
@@ -226,6 +249,7 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
         Route::get('/{bulletin}', [BulletinController::class, 'show'])->name('show');
         Route::get('/{bulletin}/download-pdf', [BulletinController::class, 'downloadPdf'])->name('download-pdf');
         Route::patch('/{bulletin}/validate', [BulletinController::class, 'validateBulletin'])->name('validate');
+        Route::patch('/{bulletin}/invalidate', [BulletinController::class, 'invalidateBulletin'])->name('invalidate');
     });
     
     Route::resource('users', UserController::class);
@@ -241,14 +265,68 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::get('import/template', [ImportController::class, 'downloadTemplate'])->name('import.template');
     
     Route::get('/statistics', [StatisticsController::class, 'index'])->name('statistics.index');
+
+    // Examens : sessions, épreuves, résultats, PV
+    Route::get('examens', [ExamenController::class, 'index'])->name('examens.index');
+    Route::post('examens', [ExamenController::class, 'store'])->name('examens.store');
+    Route::get('examens/{examen}', [ExamenController::class, 'show'])->name('examens.show');
+    Route::post('examens/{examen}/epreuves', [ExamenController::class, 'storeEpreuve'])->name('examens.epreuves.store');
+    Route::post('examens/{examen}/cloturer', [ExamenController::class, 'cloturer'])->name('examens.cloturer');
+    Route::delete('epreuves/{epreuve}', [ExamenController::class, 'destroyEpreuve'])->name('epreuves.destroy');
+    Route::get('epreuves/{epreuve}/saisie', [ExamenController::class, 'saisie'])->name('epreuves.saisie');
+    Route::post('epreuves/{epreuve}/saisie', [ExamenController::class, 'enregistrerSaisie'])->name('epreuves.saisie.store');
+    Route::get('inscriptions/classes/{classe}/pv', [InscriptionController::class, 'pv'])->name('inscriptions.pv');
+
+    // Documents administratifs
+    Route::get('documents', [DocumentController::class, 'index'])->name('documents.index');
+    Route::post('stagiaires/{stagiaire}/documents', [DocumentController::class, 'delivrer'])->name('documents.delivrer');
+    Route::post('documents/{document}/annuler', [DocumentController::class, 'annuler'])->name('documents.annuler');
+
+    // Emploi du temps hebdomadaire (créneaux) et génération des séances
+    Route::get('emploi-du-temps', [EmploiDuTempsController::class, 'index'])->name('emploi-du-temps.index');
+    Route::post('emploi-du-temps/creneaux', [EmploiDuTempsController::class, 'store'])->name('emploi-du-temps.store');
+    Route::patch('emploi-du-temps/creneaux/{creneau}', [EmploiDuTempsController::class, 'update'])->name('emploi-du-temps.update');
+    Route::delete('emploi-du-temps/creneaux/{creneau}', [EmploiDuTempsController::class, 'destroy'])->name('emploi-du-temps.destroy');
+    Route::post('emploi-du-temps/generer', [EmploiDuTempsController::class, 'generer'])->name('emploi-du-temps.generer');
+
+    // Inscriptions annuelles : délibérations et passage d'année
+    Route::get('inscriptions', [InscriptionController::class, 'index'])->name('inscriptions.index');
+    Route::get('inscriptions/classes/{classe}/deliberation', [InscriptionController::class, 'deliberation'])->name('inscriptions.deliberation');
+    Route::post('inscriptions/classes/{classe}/deliberation', [InscriptionController::class, 'enregistrerDeliberation'])->name('inscriptions.deliberation.store');
+    Route::get('inscriptions/passage', [InscriptionController::class, 'passageForm'])->name('inscriptions.passage.form');
+    Route::post('inscriptions/passage', [InscriptionController::class, 'passage'])->name('inscriptions.passage');
+    Route::post('inscriptions/copier-classes', [InscriptionController::class, 'copierClasses'])->name('inscriptions.copier-classes');
+
+    // Paramètres de l'établissement (en-têtes des documents)
+    Route::get('parametres/etablissement', [ParametreController::class, 'edit'])->name('parametres.etablissement');
+    Route::put('parametres/etablissement', [ParametreController::class, 'update'])->name('parametres.etablissement.update');
+
+    // Sauvegardes
+    Route::get('backups', [BackupController::class, 'index'])->name('backups.index');
+    Route::post('backups', [BackupController::class, 'create'])->name('backups.create');
+    Route::get('backups/{filename}/download', [BackupController::class, 'download'])->name('backups.download');
+    Route::delete('backups/{filename}', [BackupController::class, 'delete'])->name('backups.delete');
     Route::get('/statistics/export', [StatisticsController::class, 'export'])->name('statistics.export');
 });
 
 // ============================================================================
-// ðŸ’³ SYSTÃˆME DE PAIEMENT - ACCESSIBLE ADMIN & COMPTABLE
+// 💳 SYSTÈME DE PAIEMENT - ACCESSIBLE ADMIN & COMPTABLE
 // ============================================================================
 
 Route::middleware(['auth', 'verified', 'financial'])->group(function () {
+    // Dépenses, salaires des professeurs, bilan
+    Route::get('finances/depenses', [FinanceController::class, 'depenses'])->name('finances.depenses');
+    Route::post('finances/depenses', [FinanceController::class, 'storeDepense'])->name('finances.depenses.store');
+    Route::delete('finances/depenses/{depense}', [FinanceController::class, 'destroyDepense'])->name('finances.depenses.destroy');
+    Route::get('finances/salaires', [FinanceController::class, 'salaires'])->name('finances.salaires');
+    Route::post('finances/salaires/calculer', [FinanceController::class, 'calculerSalaires'])->name('finances.salaires.calculer');
+    Route::post('finances/professeurs/{professeur}/remuneration', [FinanceController::class, 'remuneration'])->name('finances.remuneration');
+    Route::get('finances/salaires/{salaire}', [FinanceController::class, 'showSalaire'])->name('finances.salaires.show');
+    Route::post('finances/salaires/{salaire}/ajuster', [FinanceController::class, 'ajusterSalaire'])->name('finances.salaires.ajuster');
+    Route::post('finances/salaires/{salaire}/payer', [FinanceController::class, 'payerSalaire'])->name('finances.salaires.payer');
+    Route::post('finances/salaires/{salaire}/annuler-paiement', [FinanceController::class, 'annulerPaiementSalaire'])->name('finances.salaires.annuler');
+    Route::get('finances/bilan', [FinanceController::class, 'bilan'])->name('finances.bilan');
+
     // PAIEMENTS
     Route::prefix('paiements')->name('paiements.')->group(function () {
         Route::get('/', [PaiementController::class, 'index'])->name('index');
@@ -257,11 +335,12 @@ Route::middleware(['auth', 'verified', 'financial'])->group(function () {
         Route::get('/{paiement}', [PaiementController::class, 'show'])->name('show');
         Route::post('/{paiement}/valider', [PaiementController::class, 'valider'])->name('valider');
         Route::post('/{paiement}/refuser', [PaiementController::class, 'refuser'])->name('refuser');
+        Route::post('/{paiement}/annuler', [PaiementController::class, 'annuler'])->name('annuler');
         Route::get('/{paiement}/recu', [PaiementController::class, 'telechargerRecu'])->name('recu');
         Route::get('/stagiaire/{stagiaire}/historique', [PaiementController::class, 'historique'])->name('historique');
     });
 
-    // Ã‰CHÃ‰ANCIERS
+    // ÉCHÉANCIERS
     Route::prefix('echeanciers')->name('echeanciers.')->group(function () {
         Route::get('/', [EcheancierController::class, 'index'])->name('index');
         Route::get('/create', [EcheancierController::class, 'create'])->name('create');
@@ -293,4 +372,28 @@ Route::middleware(['auth', 'verified', 'financial'])->group(function () {
         Route::get('/financier/export', [RapportFinancierController::class, 'exporter'])->name('financier.export');
         Route::get('/financier/graphique', [RapportFinancierController::class, 'donneesGraphique'])->name('financier.graphique');
     });
+});
+
+// Vérification publique de l'authenticité d'un document (code imprimé sur le document)
+Route::get('/verifier-document/{code?}', [DocumentController::class, 'verifier'])
+    ->middleware('throttle:30,1')
+    ->name('documents.verifier');
+
+// Réimpression d'un document délivré (administration, ou le stagiaire concerné)
+Route::get('/documents/{document}/telecharger', [DocumentController::class, 'telecharger'])
+    ->middleware('auth')
+    ->name('documents.telecharger');
+
+// Portail parents (lecture seule)
+Route::middleware(['auth', 'parent'])->prefix('parent')->name('parent.')->group(function () {
+    Route::get('/', [ParentController::class, 'index'])->name('index');
+    Route::get('/enfants/{stagiaire}', [ParentController::class, 'enfant'])->name('enfant');
+    Route::get('/enfants/{stagiaire}/bulletins/{bulletin}', [ParentController::class, 'bulletin'])->name('bulletin');
+    Route::get('/enfants/{stagiaire}/recus/{paiement}', [ParentController::class, 'recu'])->name('recu');
+});
+
+// Administration : accès parents depuis la fiche stagiaire
+Route::middleware(['auth', 'verified', 'admin'])->group(function () {
+    Route::post('stagiaires/{stagiaire}/parents', [ParentController::class, 'lier'])->name('stagiaires.parents.lier');
+    Route::delete('stagiaires/{stagiaire}/parents/{parent}', [ParentController::class, 'delier'])->name('stagiaires.parents.delier');
 });

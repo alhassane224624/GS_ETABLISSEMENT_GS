@@ -156,13 +156,26 @@
     @if(!$bulletin->validated_at)
         <div class="mt-4">
             <form action="{{ route('bulletins.validate', $bulletin) }}" method="POST" 
-                  onsubmit="return confirm('Êtes-vous sûr de vouloir valider ce bulletin ? Cette action est irréversible.')">
+                  onsubmit="return confirm('Valider ce bulletin ? Le stagiaire pourra le consulter et ses notes de la période seront verrouillées.')">
                 @csrf
                 @method('PATCH')
                 <button type="submit" class="btn btn-success btn-lg">
                     <i class="fas fa-check"></i> Valider ce Bulletin
                 </button>
             </form>
+        </div>
+    @else
+        <div class="mt-4 card border-warning">
+            <div class="card-body">
+                <p class="mb-2"><i class="fas fa-lock text-warning me-1"></i>Bulletin validé : les notes de cette période sont verrouillées.</p>
+                <form action="{{ route('bulletins.invalidate', $bulletin) }}" method="POST" class="d-flex gap-2"
+                      onsubmit="return confirm('Rouvrir ce bulletin ? Le stagiaire ne le verra plus jusqu\'à la nouvelle validation.')">
+                    @csrf
+                    @method('PATCH')
+                    <input type="text" name="motif" class="form-control" placeholder="Motif (ex. erreur de note en mathématiques)" required>
+                    <button type="submit" class="btn btn-outline-warning text-nowrap"><i class="fas fa-unlock me-1"></i>Rouvrir</button>
+                </form>
+            </div>
         </div>
     @endif
 </div>

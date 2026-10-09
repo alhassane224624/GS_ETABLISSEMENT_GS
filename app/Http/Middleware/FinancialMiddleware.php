@@ -20,6 +20,11 @@ class FinancialMiddleware
             abort(403, 'Accès réservé aux administrateurs et comptables');
         }
 
+        if (!$user->is_active) {
+            auth()->logout();
+            return redirect()->route('login')->with('error', 'Votre compte a été désactivé.');
+        }
+
         return $next($request);
     }
 }

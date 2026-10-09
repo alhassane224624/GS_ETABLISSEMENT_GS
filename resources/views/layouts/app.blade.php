@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>@yield('title', 'Tableau de Bord - EMSI')</title>
+    <title>@yield('title', 'Tableau de bord') - {{ \App\Support\Etablissement::get('nom') }}</title>
 
     <!-- Google Fonts + Bootstrap + FontAwesome -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
@@ -465,6 +465,11 @@
                     <a href="{{ route('periodes.index') }}" class="nav-link"><i class="fa fa-clock me-2"></i> Périodes</a>
                     <a href="{{ route('salles.index') }}" class="nav-link"><i class="fa fa-door-open me-2"></i> Salles</a>
                     <a href="{{ route('statistics.index') }}" class="nav-link"><i class="fa fa-chart-bar me-2"></i> Statistiques</a>
+                    <a href="{{ route('emploi-du-temps.index') }}" class="nav-link"><i class="fa fa-calendar-week me-2"></i> Emploi du temps</a>
+                    <a href="{{ route('documents.index') }}" class="nav-link"><i class="fa fa-file-signature me-2"></i> Documents délivrés</a>
+                    <a href="{{ route('inscriptions.index') }}" class="nav-link"><i class="fa fa-user-graduate me-2"></i> Inscriptions &amp; passage</a>
+                    <a href="{{ route('parametres.etablissement') }}" class="nav-link"><i class="fa fa-school me-2"></i> Établissement</a>
+                    <a href="{{ route('backups.index') }}" class="nav-link"><i class="fa fa-database me-2"></i> Sauvegardes</a>
                 </div>
             </li>
         </ul>
@@ -533,6 +538,12 @@
             </div>
         </nav>
 
+        @if(auth()->check() && auth()->user()->isAdmin() && !\App\Support\Etablissement::estConfigure() && !request()->routeIs('parametres.*'))
+            <div class="alert alert-warning d-flex align-items-center justify-content-between">
+                <span><i class="fas fa-exclamation-triangle me-2"></i>Le nom de l'établissement n'est pas renseigné : il manque sur les reçus et les documents.</span>
+                <a href="{{ route('parametres.etablissement') }}" class="btn btn-sm btn-warning">Configurer</a>
+            </div>
+        @endif
         @if(session('success'))
             <div class="alert alert-success alert-dismissible fade show">
                 <i class="fas fa-check-circle me-2"></i>{{ session('success') }}

@@ -263,7 +263,7 @@
         <p>Document généré automatiquement le {{ now()->format('d/m/Y à H:i') }}</p>
         <p>Ce document est un relevé de notes officiel</p>
         <p style="margin-top: 5px; font-size: 8px;">
-            {{ config('app.name') }} - {{ $stagiaire->filiere->nom ?? '' }}
+            {{ \App\Support\Etablissement::get('nom') }} - {{ $stagiaire->filiere->nom ?? '' }}
         </p>
     </div>
 </body>

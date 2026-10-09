@@ -9,6 +9,9 @@ use App\Models\Remise;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use App\Exports\RapportFinancierExport;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Maatwebsite\Excel\Facades\Excel;
 
 class RapportFinancierController extends Controller
 {
@@ -23,8 +26,7 @@ class RapportFinancierController extends Controller
      */
     public function index(Request $request)
     {
-        $dateDebut = $request->input('date_debut', now()->startOfMonth());
-        $dateFin = $request->input('date_fin', now());
+        [$dateDebut, $dateFin] = $this->periode($request);
         $filiereId = $request->input('filiere_id');
 
         // KPIs principaux
@@ -64,34 +66,34 @@ class RapportFinancierController extends Controller
             })
             ->sum('montant');
 
-        // Montant attendu (échéanciers)
-        $totalAttendu = Echeancier::whereBetween('date_echeance', [$dateDebut, $dateFin])
+        // Montant attendu sur la période (après remises)
+        $totalAttendu = (float) Echeancier::whereBetween('date_echeance', [$dateDebut, $dateFin])
             ->when($filiereId, function($q) use ($filiereId) {
                 $q->whereHas('stagiaire', fn($sq) => $sq->where('filiere_id', $filiereId));
             })
-            ->sum('montant');
+            ->sum(DB::raw('montant - montant_remise'));
 
-        // Impayés
-        $totalImpayes = Echeancier::whereIn('statut', ['impaye', 'paye_partiel', 'en_retard'])
+        // Impayés (toutes échéances non soldées à ce jour)
+        $totalImpayes = Echeancier::where('montant_restant', '>', 0)
             ->when($filiereId, function($q) use ($filiereId) {
                 $q->whereHas('stagiaire', fn($sq) => $sq->where('filiere_id', $filiereId));
             })
             ->sum('montant_restant');
 
-        // Nombre de retards
-        $nbRetards = Echeancier::where('statut', 'en_retard')
+        // Nombre d'échéances en retard
+        $nbRetards = Echeancier::where('montant_restant', '>', 0)
+            ->whereDate('date_echeance', '<', now()->toDateString())
             ->when($filiereId, function($q) use ($filiereId) {
                 $q->whereHas('stagiaire', fn($sq) => $sq->where('filiere_id', $filiereId));
             })
             ->count();
 
-        // Remises accordées
-        $totalRemises = Remise::where('is_active', true)
-            ->whereBetween('date_debut', [$dateDebut, $dateFin])
+        // Remises réellement accordées sur les échéances de la période
+        $totalRemises = (float) Echeancier::whereBetween('date_echeance', [$dateDebut, $dateFin])
             ->when($filiereId, function($q) use ($filiereId) {
                 $q->whereHas('stagiaire', fn($sq) => $sq->where('filiere_id', $filiereId));
             })
-            ->sum(DB::raw('CASE WHEN type = "montant_fixe" THEN valeur ELSE 0 END'));
+            ->sum('montant_remise');
 
         $nbRemises = Remise::where('is_active', true)
             ->when($filiereId, function($q) use ($filiereId) {
@@ -110,6 +112,9 @@ class RapportFinancierController extends Controller
                 Carbon::parse($dateDebut)->subMonth(),
                 Carbon::parse($dateFin)->subMonth()
             ])
+            ->when($filiereId, function($q) use ($filiereId) {
+                $q->whereHas('stagiaire', fn($sq) => $sq->where('filiere_id', $filiereId));
+            })
             ->sum('montant');
 
         $evolutionEncaisse = $moisPrecedent > 0
@@ -172,56 +177,72 @@ class RapportFinancierController extends Controller
     public function exporter(Request $request)
     {
         $format = $request->input('format', 'excel');
-        $dateDebut = $request->input('date_debut', now()->startOfMonth());
-        $dateFin = $request->input('date_fin', now());
+        [$dateDebut, $dateFin] = $this->periode($request);
         $filiereId = $request->input('filiere_id');
+        $filtreFiliere = fn ($q) => $q->whereHas('stagiaire', fn ($sq) => $sq->where('filiere_id', $filiereId));
 
-        $stats = $this->calculerStatistiques($dateDebut, $dateFin, $filiereId);
-        
-        // Données détaillées
-        $paiements = Paiement::with('stagiaire.filiere')
-            ->where('statut', 'valide')
-            ->whereBetween('date_paiement', [$dateDebut, $dateFin])
-            ->when($filiereId, function($q) use ($filiereId) {
-                $q->whereHas('stagiaire', fn($sq) => $sq->where('filiere_id', $filiereId));
-            })
-            ->get();
+        $donnees = [
+            'stats'      => $this->calculerStatistiques($dateDebut, $dateFin, $filiereId),
+            'dateDebut'  => $dateDebut,
+            'dateFin'    => $dateFin,
+            'filiere'    => $filiereId ? Filiere::find($filiereId) : null,
 
-        $echeanciers = Echeancier::with('stagiaire.filiere')
-            ->whereBetween('date_echeance', [$dateDebut, $dateFin])
-            ->when($filiereId, function($q) use ($filiereId) {
-                $q->whereHas('stagiaire', fn($sq) => $sq->where('filiere_id', $filiereId));
-            })
-            ->get();
+            // Encaissements validés de la période
+            'paiements'  => Paiement::with(['stagiaire.filiere', 'echeanciers'])
+                ->where('statut', 'valide')
+                ->whereBetween('date_paiement', [$dateDebut, $dateFin])
+                ->when($filiereId, $filtreFiliere)
+                ->orderBy('date_paiement')->orderBy('id')
+                ->get(),
 
-        if ($format === 'excel') {
-            return $this->exporterExcel($stats, $paiements, $echeanciers, $dateDebut, $dateFin);
-        } else {
-            return $this->exporterPdf($stats, $paiements, $echeanciers, $dateDebut, $dateFin);
+            // Échéances de la période
+            'echeanciers'=> Echeancier::with('stagiaire.filiere')
+                ->whereBetween('date_echeance', [$dateDebut, $dateFin])
+                ->when($filiereId, $filtreFiliere)
+                ->orderBy('date_echeance')
+                ->get(),
+
+            // Impayés en retard à ce jour (toutes périodes)
+            'retards'    => Echeancier::with('stagiaire.filiere')
+                ->where('montant_restant', '>', 0)
+                ->whereDate('date_echeance', '<', now()->toDateString())
+                ->when($filiereId, $filtreFiliere)
+                ->orderBy('date_echeance')
+                ->get(),
+        ];
+
+        // Encaissé par filière
+        $donnees['par_filiere'] = $donnees['paiements']
+            ->groupBy(fn ($p) => $p->stagiaire->filiere->nom ?? 'Sans filière')
+            ->map(fn ($g) => ['nombre' => $g->count(), 'montant' => (float) $g->sum('montant')])
+            ->sortByDesc('montant');
+
+        $nom = 'rapport_financier_' . $dateDebut->format('Y-m-d') . '_' . $dateFin->format('Y-m-d');
+
+        if ($format === 'pdf') {
+            return Pdf::loadView('admin.rapports.financier-pdf', $donnees)
+                ->setPaper('a4')
+                ->download($nom . '.pdf');
         }
+
+        return Excel::download(new RapportFinancierExport($donnees), $nom . '.xlsx');
     }
 
     /**
-     * Exporte en Excel
+     * Période du rapport : du début du jour de début à la fin du jour de fin
      */
-    private function exporterExcel($stats, $paiements, $echeanciers, $dateDebut, $dateFin)
+    private function periode(Request $request): array
     {
-        // TODO: Implémenter avec Maatwebsite Excel
-        return response()->json(['message' => 'Export Excel à implémenter']);
+        $debut = $request->filled('date_debut') ? Carbon::parse($request->date_debut) : now()->startOfMonth();
+        $fin = $request->filled('date_fin') ? Carbon::parse($request->date_fin) : now();
+
+        if ($fin->lt($debut)) {
+            [$debut, $fin] = [$fin, $debut];
+        }
+
+        return [$debut->copy()->startOfDay(), $fin->copy()->endOfDay()];
     }
 
-    /**
-     * Exporte en PDF
-     */
-    private function exporterPdf($stats, $paiements, $echeanciers, $dateDebut, $dateFin)
-    {
-        // TODO: Implémenter avec DomPDF
-        return response()->json(['message' => 'Export PDF à implémenter']);
-    }
-
-    /**
-     * API pour les graphiques AJAX
-     */
     public function donneesGraphique(Request $request)
     {
         $periode = $request->input('periode', 30);

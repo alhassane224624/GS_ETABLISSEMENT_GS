@@ -244,7 +244,7 @@
                                     </span>
                                 </td>
                                 <td>
-                                    <a href="{{ route('admin.stagiaires.show', $retard->stagiaire_id) }}" 
+                                    <a href="{{ auth()->user()->isAdmin() ? route('stagiaires.show', $retard->stagiaire_id) : route('comptable.stagiaires.show', $retard->stagiaire_id) }}" 
                                        class="btn btn-sm btn-primary">
                                         <i class="fas fa-eye"></i>
                                     </a>

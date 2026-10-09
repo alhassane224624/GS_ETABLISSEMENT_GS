@@ -271,6 +271,9 @@
         <a href="{{ route('stagiaire.emploi-du-temps') }}" class="nav-link {{ Request::is('stagiaire/emploi-du-temps*') ? 'active' : '' }}">
           <i class="fas fa-calendar-alt"></i><span> Emploi du Temps</span>
         </a>
+        <a href="{{ route('stagiaire.attestation') }}" class="nav-link">
+          <i class="fas fa-file-signature"></i><span>Attestation de scolarité</span>
+        </a>
       </li>
       <li class="nav-item">
         <a href="{{ route('stagiaire.absences') }}" class="nav-link {{ Request::is('stagiaire/absences*') ? 'active' : '' }}">

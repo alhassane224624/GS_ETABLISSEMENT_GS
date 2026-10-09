@@ -19,16 +19,20 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule)
     {
-        // Vérifie les retards de paiement chaque jour à 8h00
-        $schedule->command('paiements:check-retards')
-            ->dailyAt('08:00')
-            ->emailOutputOnFailure('admin@emsi.ma');
+        // Passe en "en_retard" les échéances dépassées — chaque jour à 8h00
+        $schedule->command('paiements:check-retards')->dailyAt('08:00')->withoutOverlapping();
 
-        // Nettoie les anciennes notifications tous les dimanches à 2h00
-        $schedule->command('notifications:clear-old')
-            ->weekly()
-            ->sundays()
-            ->at('02:00');
+        // Rappels avant échéance — chaque jour à 9h00
+        $schedule->command('paiements:rappels')->dailyAt('09:00')->withoutOverlapping();
+
+        // Signalement des absences non justifiées — chaque soir
+        $schedule->command('absences:check-unjustified')->dailyAt('18:00');
+
+        // Nettoyage des notifications de plus de 30 jours — dimanche 2h00
+        $schedule->command('notifications:clean --days=30')->weeklyOn(0, '02:00');
+
+        // Sauvegarde complète — chaque nuit à 1h00
+        $schedule->command('backup:run full')->dailyAt('01:00')->withoutOverlapping();
     }
 
     /**

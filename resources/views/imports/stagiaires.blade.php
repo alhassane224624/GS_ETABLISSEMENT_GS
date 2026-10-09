@@ -61,7 +61,9 @@
                             <ul class="small">
                                 <li><strong>nom</strong> : Nom du stagiaire (obligatoire)</li>
                                 <li><strong>prenom</strong> : Prénom (obligatoire)</li>
-                                <li><strong>matricule</strong> : Matricule unique (obligatoire)</li>
+                                <li><strong>email</strong> : E-mail du stagiaire (obligatoire, sert d'identifiant)</li>
+                                <li><strong>telephone</strong> : Téléphone (optionnel)</li>
+                                <li><strong>matricule</strong> : optionnel, généré automatiquement si vide</li>
                                 <li><strong>filiere_nom</strong> : Nom de la filière (optionnel si filière par défaut)</li>
                             </ul>
                         </div>
@@ -69,6 +71,7 @@
                             <h6>Conseils :</h6>
                             <ul class="small">
                                 <li>Première ligne = en-têtes de colonnes</li>
+                                <li>Un rapport CSV avec les mots de passe provisoires est téléchargé à la fin</li>
                                 <li>Matricules doivent être uniques</li>
                                 <li>Noms de filières doivent exister</li>
                                 <li>Maximum 500 lignes par import</li>
@@ -77,14 +80,14 @@
                     </div>
                     
                     <div class="mt-3">
-                        <a href="{{ route('imports.template') }}" class="btn btn-sm btn-outline-success">
+                        <a href="{{ route('import.template') }}" class="btn btn-sm btn-outline-success">
                             <i class="fas fa-download me-2"></i>Télécharger le modèle Excel
                         </a>
                     </div>
                 </div>
 
                 <!-- Formulaire d'import -->
-                <form method="POST" action="{{ route('imports.stagiaires.store') }}" enctype="multipart/form-data">
+                <form method="POST" action="{{ route('import.stagiaires') }}" enctype="multipart/form-data">
                     @csrf
 
                     <div class="row mb-4">
@@ -243,10 +246,9 @@
                     <i class="fas fa-lightbulb me-2"></i>Exemple de fichier CSV
                 </h6>
                 <div class="bg-dark text-light p-2 rounded small">
-                    <pre style="margin: 0; font-size: 10px;">nom,prenom,matricule,filiere_nom
-DUPONT,Jean,ST001,Informatique
-MARTIN,Marie,ST002,Gestion
-BERNARD,Paul,ST003,Informatique</pre>
+                    <pre style="margin: 0; font-size: 10px;">nom,prenom,email,telephone,matricule,filiere_nom
+DUPONT,Jean,jean@mail.com,0600000000,,Informatique
+MARTIN,Marie,marie@mail.com,0611111111,,Gestion</pre>
                 </div>
             </div>
         </div>

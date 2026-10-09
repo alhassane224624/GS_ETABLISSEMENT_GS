@@ -23,7 +23,8 @@ class MessageController extends Controller
         if (!$user) return 'layouts.app';
 
         return match ($user->role) {
-            'admin'      => 'layouts.app',
+            'administrateur' => 'layouts.app',
+            'comptable'  => 'layouts.comptable',
             'professeur' => 'layouts.app-professeur',
             'stagiaire'  => 'layouts.app-stagiaire',
             default      => 'layouts.app',
@@ -152,29 +153,68 @@ class MessageController extends Controller
             ->with('success', 'Message envoyé à ' . $receiver->name);
     }
 
+    /**
+     * Message de groupe : administrateur (tous les stagiaires) ou professeur (ses filières uniquement).
+     */
+    private function filieresAutorisees(): ?\Illuminate\Support\Collection
+    {
+        $user = Auth::user();
+        if ($user->role === 'administrateur') {
+            return null; // pas de restriction
+        }
+        abort_unless($user->role === 'professeur', 403, 'Seuls les administrateurs et les professeurs peuvent écrire à un groupe.');
+
+        return $user->filieres()->pluck('filieres.id');
+    }
+
     public function showSendGroupForm()
     {
-        $filieres = Filiere::select('id', 'nom')->orderBy('nom')->get();
-        $classes  = Classe::with('filiere:id,nom')->select('id', 'nom', 'filiere_id')->get();
-        $layout   = $this->layout();
+        $autorisees = $this->filieresAutorisees();
+
+        $filieres = Filiere::select('id', 'nom')
+            ->when($autorisees !== null, fn ($q) => $q->whereIn('id', $autorisees))
+            ->orderBy('nom')->get();
+        $classes = Classe::with('filiere:id,nom')->select('id', 'nom', 'filiere_id')
+            ->when($autorisees !== null, fn ($q) => $q->whereIn('filiere_id', $autorisees))
+            ->orderBy('nom')->get();
+        $layout = $this->layout();
 
         return view('messages.send-group', compact('filieres', 'classes', 'layout'));
     }
 
     public function sendGroup(Request $request)
     {
+        $autorisees = $this->filieresAutorisees();
+
         $validated = $request->validate([
             'filiere_id' => 'nullable|exists:filieres,id',
             'classe_id'  => 'nullable|exists:classes,id',
             'message'    => 'required|string|max:1000',
         ]);
 
+        // Un professeur ne cible que ses filières
+        if ($autorisees !== null) {
+            if (!empty($validated['filiere_id']) && !$autorisees->contains((int) $validated['filiere_id'])) {
+                abort(403, 'Cette filière ne vous est pas affectée.');
+            }
+            if (!empty($validated['classe_id']) && !$autorisees->contains((int) Classe::whereKey($validated['classe_id'])->value('filiere_id'))) {
+                abort(403, 'Cette classe ne vous est pas affectée.');
+            }
+        }
+
         $stagiaires = Stagiaire::query()
-            ->when($validated['filiere_id'], fn($q) => $q->whereHas('classe', fn($qq) => $qq->where('filiere_id', $validated['filiere_id'])))
-            ->when($validated['classe_id'], fn($q) => $q->where('classe_id', $validated['classe_id']))
+            ->where('statut', 'actif')
+            ->when($autorisees !== null, fn ($q) => $q->whereIn('filiere_id', $autorisees))
+            ->when(!empty($validated['filiere_id']), fn ($q) => $q->where('filiere_id', $validated['filiere_id']))
+            ->when(!empty($validated['classe_id']), fn ($q) => $q->where('classe_id', $validated['classe_id']))
+            ->with('user')
             ->get();
 
-        $receivers = $stagiaires->map(fn($s) => $s->user)->filter();
+        $receivers = $stagiaires->map(fn ($s) => $s->user)->filter()->unique('id');
+
+        if ($receivers->isEmpty()) {
+            return back()->withInput()->with('error', 'Aucun stagiaire actif ne correspond à ce groupe.');
+        }
 
         DB::transaction(function () use ($receivers, $validated) {
             foreach ($receivers as $receiver) {
@@ -183,14 +223,12 @@ class MessageController extends Controller
                     'receiver_id' => $receiver->id,
                     'message'     => $validated['message'],
                 ]);
-
-                // 🔔 NOTIFICATION : Notifier chaque destinataire
                 $receiver->notify(new MessageReceived($message));
             }
         });
 
         return redirect()->route('messages.index')
-            ->with('success', '✅ Message envoyé à ' . $receivers->count() . ' stagiaires.');
+            ->with('success', 'Message envoyé à ' . $receivers->count() . ' stagiaire(s).');
     }
 
     public function deleteConversation(User $user)

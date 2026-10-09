@@ -278,6 +278,9 @@
                     <a class="nav-link {{ Request::is('professeur/planning*') ? 'active' : '' }}" href="{{ route('professeur.planning') }}">
                         <i class="fas fa-calendar-alt me-2"></i> Mon Planning
                     </a>
+                    <a class="nav-link {{ Request::is('professeur/epreuves*') ? 'active' : '' }}" href="{{ route('professeur.epreuves') }}">
+                        <i class="fas fa-file-alt me-2"></i> Mes épreuves
+                    </a>
                 </li>
 
                 <li class="nav-item mt-3">

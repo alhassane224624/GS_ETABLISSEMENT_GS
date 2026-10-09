@@ -159,29 +159,37 @@
                         </div>
                     </div>
 
-                    <!-- Calcul d'exemple -->
-                    @if($remise->is_active)
-                        <div class="mb-4">
-                            <h6 class="text-primary mb-3">
-                                <i class="fas fa-calculator"></i> Exemple de Calcul
-                            </h6>
-                            <div class="alert alert-info">
-                                @if($remise->type === 'pourcentage')
-                                    <p class="mb-0">
-                                        <strong>Pour un montant de 1000 DH :</strong><br>
-                                        Remise = 1000 DH × {{ $remise->valeur }}% = <strong>{{ number_format(1000 * $remise->valeur / 100, 2) }} DH</strong><br>
-                                        Montant après remise = <strong>{{ number_format(1000 - (1000 * $remise->valeur / 100), 2) }} DH</strong>
-                                    </p>
-                                @else
-                                    <p class="mb-0">
-                                        <strong>Pour un montant de 1000 DH :</strong><br>
-                                        Remise = <strong>{{ number_format($remise->valeur, 2) }} DH</strong><br>
-                                        Montant après remise = <strong>{{ number_format(1000 - $remise->valeur, 2) }} DH</strong>
-                                    </p>
-                                @endif
+                    <!-- Échéances concernées -->
+                    <div class="mb-4">
+                        <h6 class="text-primary mb-3">
+                            <i class="fas fa-calendar-check"></i> Échéances concernées
+                            <small class="text-muted">({{ $remise->porte_libelle }})</small>
+                        </h6>
+                        @if ($echeances->isEmpty())
+                            <div class="alert alert-light border mb-0">Aucune échéance du stagiaire n'entre dans la période de cette remise.</div>
+                        @else
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle">
+                                    <thead class="table-light">
+                                        <tr><th>Échéance</th><th>Date</th><th class="text-end">Montant</th><th class="text-end">Remise appliquée</th><th class="text-end">Reste</th><th>Statut</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach ($echeances as $e)
+                                            <tr>
+                                                <td>{{ $e->titre }}</td>
+                                                <td>{{ $e->date_echeance->format('d/m/Y') }}</td>
+                                                <td class="text-end">{{ number_format($e->montant, 2, ',', ' ') }} DH</td>
+                                                <td class="text-end text-success">− {{ number_format($e->montant_remise, 2, ',', ' ') }} DH</td>
+                                                <td class="text-end fw-semibold">{{ number_format($e->montant_restant, 2, ',', ' ') }} DH</td>
+                                                <td><span class="badge bg-{{ $e->statut_couleur }}">{{ $e->statut_libelle }}</span></td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
                             </div>
-                        </div>
-                    @endif
+                            <small class="text-muted">La colonne « Remise appliquée » cumule toutes les remises actives du stagiaire sur l'échéance.</small>
+                        @endif
+                    </div>
 
                     <!-- Actions -->
                     <div class="d-flex justify-content-between align-items-center pt-3 border-top">

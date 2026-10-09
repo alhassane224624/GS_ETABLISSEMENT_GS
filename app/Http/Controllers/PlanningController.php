@@ -131,6 +131,13 @@ class PlanningController extends Controller
             ->with('success', 'Cours ajouté au planning avec succès.');
     }
 
+    public function show(Planning $planning)
+    {
+        $planning->load(['professeur', 'salle', 'matiere', 'classe', 'creator', 'validator', 'absences.stagiaire']);
+
+        return view('planning.show', compact('planning'));
+    }
+
     public function edit(Planning $planning)
     {
         $professeurs = User::where('role', 'professeur')->get();

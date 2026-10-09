@@ -171,9 +171,13 @@
 </head>
 <body>
 
+    @php $etab = \App\Support\Etablissement::infos(); $logo = \App\Support\Etablissement::logoBase64(); @endphp
+    @include('documents.partials.entete')
+    <div style="height: 10px;"></div>
+
     <!-- ===== HEADER ===== -->
     <div class="header">
-        <h1> BULLETIN SCOLAIRE</h1>
+        <h1>BULLETIN SCOLAIRE</h1>
         <h2>{{ $bulletin->periode->nom ?? 'Période non définie' }}</h2>
         <p>Année scolaire {{ $bulletin->periode->anneeScolaire->nom ?? 'N/A' }}</p>
     </div>

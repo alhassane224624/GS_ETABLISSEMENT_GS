@@ -124,6 +124,27 @@ class Stagiaire extends Model
     // NOUVELLES RELATIONS - SYSTÈME DE PAIEMENT
     // ========================================================================
 
+    /** Comptes parents / tuteurs ayant accès au suivi */
+    public function parents()
+    {
+        return $this->belongsToMany(User::class, 'parent_stagiaire', 'stagiaire_id', 'user_id')
+            ->withPivot('lien')->withTimestamps();
+    }
+
+    /**
+     * Inscriptions annuelles (historique de scolarité)
+     */
+    public function inscriptions()
+    {
+        return $this->hasMany(Inscription::class)->orderByDesc('annee_scolaire_id');
+    }
+
+    public function inscriptionActive()
+    {
+        return $this->hasOne(Inscription::class)
+            ->whereHas('anneeScolaire', fn ($q) => $q->where('is_active', true));
+    }
+
     /**
      * Relation avec les paiements
      */
@@ -349,62 +370,31 @@ class Stagiaire extends Model
      */
     public function updateSoldePaiement()
     {
-        // Calculer le total à payer depuis les échéanciers
-        $totalAPayer = $this->echeanciers()->sum('montant');
+        // Tout est calculé à partir des échéances (elles-mêmes alimentées par les seuls paiements validés)
+        $echeances = $this->echeanciers();
 
-        // Calculer le total payé depuis les paiements validés
-        $totalPaye = $this->paiementsValides()->sum('montant');
+        $totalAPayer = (float) (clone $echeances)->sum(\Illuminate\Support\Facades\DB::raw('montant - montant_remise'));
+        $totalPaye = (float) (clone $echeances)->sum('montant_paye');
+        $soldeRestant = (float) (clone $echeances)->sum('montant_restant');
+        $enRetard = (clone $echeances)->where('montant_restant', '>', 0)
+            ->whereDate('date_echeance', '<', now()->toDateString())
+            ->exists();
 
-        // Calculer le solde restant
-        $soldeRestant = $totalAPayer - $totalPaye;
+        $statut = match (true) {
+            $totalAPayer <= 0  => 'en_attente',
+            $soldeRestant <= 0 => 'a_jour',
+            $enRetard          => 'en_retard',
+            default            => 'en_cours',
+        };
 
-        // Déterminer le statut de paiement
-        $statutPaiement = $this->determinerStatutPaiement($totalAPayer, $totalPaye, $soldeRestant);
-
-        // Mettre à jour le stagiaire
         $this->update([
-            'total_a_payer' => $totalAPayer,
-            'total_paye' => $totalPaye,
-            'solde_restant' => max(0, $soldeRestant),
-            'statut_paiement' => $statutPaiement,
+            'total_a_payer'   => $totalAPayer,
+            'total_paye'      => $totalPaye,
+            'solde_restant'   => $soldeRestant,
+            'statut_paiement' => $statut,
         ]);
 
         return $this;
-    }
-
-    /**
-     * Déterminer le statut de paiement
-     */
-    private function determinerStatutPaiement($totalAPayer, $totalPaye, $soldeRestant)
-    {
-        // Vérifier s'il y a des échéanciers en retard
-        $hasRetards = $this->echeanciers()
-            ->where('statut', 'en_retard')
-            ->exists();
-
-        if ($hasRetards) {
-            return 'en_retard';
-        }
-
-        if ($totalAPayer == 0) {
-            return 'en_attente';
-        }
-
-        if ($soldeRestant <= 0) {
-            return 'a_jour';
-        }
-
-        // Vérifier si un échéancier est dépassé
-        $hasEcheanceDepassee = $this->echeanciers()
-            ->whereIn('statut', ['impaye', 'paye_partiel'])
-            ->where('date_echeance', '<', now())
-            ->exists();
-
-        if ($hasEcheanceDepassee) {
-            return 'en_retard';
-        }
-
-        return 'en_cours';
     }
 
     /**

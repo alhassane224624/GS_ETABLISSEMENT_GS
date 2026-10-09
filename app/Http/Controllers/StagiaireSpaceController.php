@@ -136,7 +136,8 @@ class StagiaireSpaceController extends Controller
         $stagiaire = Stagiaire::where('user_id', $user->id)->firstOrFail();
 
         $periodeId = $request->input('periode_id');
-        $query = $stagiaire->bulletins()->with('periode');
+        // Seuls les bulletins validés par l'administration sont visibles
+        $query = $stagiaire->bulletins()->with('periode')->whereNotNull('validated_at');
         if ($periodeId) $query->where('periode_id', $periodeId);
 
         $bulletins = $query->latest()->get();
@@ -150,12 +151,13 @@ class StagiaireSpaceController extends Controller
         $user = Auth::user();
         $stagiaire = Stagiaire::where('user_id', $user->id)->firstOrFail();
 
-        abort_if($bulletin->stagiaire_id !== $stagiaire->id, 403);
+        abort_if((int) $bulletin->stagiaire_id !== (int) $stagiaire->id, 403);
         if (!$bulletin->validated_at) {
             return back()->with('error', 'Ce bulletin n\'est pas encore validé.');
         }
 
-        $pdf = Pdf::loadView('stagiaires.pdf.bulletin', compact('bulletin', 'stagiaire'));
+        $bulletin->loadMissing(['stagiaire', 'periode.anneeScolaire', 'classe.filiere']);
+        $pdf = Pdf::loadView('bulletins.pdf', compact('bulletin')); // même modèle que l'administration
         return $pdf->download('bulletin_' . $stagiaire->matricule . '_' . $bulletin->periode->nom . '.pdf');
     }
 
@@ -249,14 +251,17 @@ class StagiaireSpaceController extends Controller
         $user = Auth::user();
         $stagiaire = Stagiaire::where('user_id', $user->id)->firstOrFail();
 
-        abort_if($paiement->stagiaire_id !== $stagiaire->id, 403);
+        abort_if((int) $paiement->stagiaire_id !== (int) $stagiaire->id, 403);
+        abort_if($paiement->statut !== 'valide', 403, 'Reçu disponible uniquement pour les paiements validés.');
 
-        $paiement->load(['echeanciers']);
+        $paiement->load(['stagiaire.filiere', 'stagiaire.classe', 'echeanciers', 'validateur', 'user']);
 
-        $pdf = Pdf::loadView('stagiaires.pdf.recu', compact('paiement', 'stagiaire'))
-            ->setPaper('a4');
+        // Même modèle de reçu que côté administration
+        $pdf = Pdf::loadView('paiements.recu', compact('paiement'))->setPaper('a4');
 
-        return $pdf->download('recu_' . $paiement->numero_transaction . '.pdf');
+        return $pdf->download('recu_' . $paiement->numero_transaction . '.pdf')
+            ->header('Cache-Control', 'no-store, no-cache, must-revalidate')
+            ->header('Pragma', 'no-cache');
     }
 
     // =========================================================================
@@ -280,5 +285,34 @@ class StagiaireSpaceController extends Controller
         ];
 
         return view('stagiaires.echeanciers', compact('echeanciers', 'stats', 'stagiaire'));
+    }
+
+    /**
+     * Cahier de textes de la classe : ce qui a été fait en cours et le travail à faire
+     */
+    public function cahierDeTextes(Request $request)
+    {
+        $stagiaire = Stagiaire::where('user_id', Auth::id())->firstOrFail();
+
+        $aFaire = Planning::with(['matiere', 'professeur:id,name'])
+            ->where('classe_id', $stagiaire->classe_id)
+            ->whereNotNull('devoirs')
+            ->whereDate('devoirs_pour', '>=', now()->toDateString())
+            ->orderBy('devoirs_pour')
+            ->get();
+
+        $seances = Planning::with(['matiere', 'professeur:id,name'])
+            ->where('classe_id', $stagiaire->classe_id)
+            ->whereNotNull('appel_fait_at')
+            ->where(fn ($q) => $q->whereNotNull('contenu_seance')->orWhereNotNull('devoirs'))
+            ->when($request->filled('matiere_id'), fn ($q) => $q->where('matiere_id', $request->matiere_id))
+            ->orderByDesc('date')->orderByDesc('heure_debut')
+            ->paginate(15)
+            ->withQueryString();
+
+        $matieres = \App\Models\Matiere::whereIn('id', Planning::where('classe_id', $stagiaire->classe_id)->distinct()->pluck('matiere_id'))
+            ->orderBy('nom')->get();
+
+        return view('stagiaires.cahier-de-textes', compact('stagiaire', 'aFaire', 'seances', 'matieres'));
     }
 }

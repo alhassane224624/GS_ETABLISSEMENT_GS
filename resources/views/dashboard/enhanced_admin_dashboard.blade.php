@@ -33,7 +33,7 @@ MARTIN,Marie,ST002,Gestion</code>
                                 </div>
                             </div>
                             <div class="mt-2">
-                                <a href="{{ route('imports.template') }}" class="btn btn-sm btn-success">
+                                <a href="{{ route('import.template') }}" class="btn btn-sm btn-success">
                                     <i class="fas fa-download me-1"></i>Télécharger modèle
                                 </a>
                             </div>
@@ -304,7 +304,7 @@ function submitImport() {
     modal.hide();
     
     // Redirection vers la page d'import réelle
-    window.location.href = '{{ route("imports.stagiaires.form") }}';
+    window.location.href = '{{ route("import.stagiaires.form") }}';
 }
 
 function previewImport() {

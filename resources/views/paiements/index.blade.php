@@ -103,6 +103,7 @@
                         <option value="en_attente" {{ request('statut') == 'en_attente' ? 'selected' : '' }}>En attente</option>
                         <option value="valide" {{ request('statut') == 'valide' ? 'selected' : '' }}>Validé</option>
                         <option value="refuse" {{ request('statut') == 'refuse' ? 'selected' : '' }}>Refusé</option>
+                        <option value="annule" {{ request('statut') == 'annule' ? 'selected' : '' }}>Annulé</option>
                     </select>
                 </div>
 
@@ -189,8 +190,8 @@
                                         <i class="fas fa-clock me-1"></i>{{ $paiement->statut_libelle }}
                                     </span>
                                 @else
-                                    <span class="badge bg-danger">
-                                        <i class="fas fa-times-circle me-1"></i>{{ $paiement->statut_libelle }}
+                                    <span class="badge bg-{{ $paiement->statut_couleur }}">
+                                        <i class="fas fa-{{ $paiement->statut === 'refuse' ? 'times-circle' : 'ban' }} me-1"></i>{{ $paiement->statut_libelle }}
                                     </span>
                                 @endif
                             </td>
@@ -202,7 +203,7 @@
                                         <i class="fas fa-eye"></i>
                                     </a>
                                     
-                                    @if($paiement->statut === 'valide' && $paiement->recu_path)
+                                    @if($paiement->statut === 'valide')
                                         <a href="{{ route('paiements.recu', $paiement) }}" 
                                            class="btn btn-outline-success" 
                                            title="Télécharger reçu">

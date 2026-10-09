@@ -50,9 +50,17 @@ class PeriodeController extends Controller
 
     public function show($periode)
     {
-        $periode = Periode::with(['anneeScolaire', 'notes'])->findOrFail($periode);
-        
-        return view('periodes.show', compact('periode'));
+        $periode = Periode::with('anneeScolaire')
+            ->withCount(['notes', 'bulletins'])
+            ->findOrFail($periode);
+
+        $stats = [
+            'bulletins_valides' => $periode->bulletins()->whereNotNull('validated_at')->count(),
+            'absences'          => \App\Models\Absence::where('periode_id', $periode->id)->count(),
+            'moyenne'           => $periode->bulletins()->avg('moyenne_generale'),
+        ];
+
+        return view('periodes.show', compact('periode', 'stats'));
     }
 
     public function edit($periode)

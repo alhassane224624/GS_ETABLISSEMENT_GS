@@ -10,7 +10,9 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+use App\Services\StagiaireService;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\StagiairesExport;
 
@@ -21,9 +23,9 @@ use App\Notifications\InscriptionValidated;
 
 class StagiaireController extends Controller
 {
-    public function __construct()
+    public function __construct(private StagiaireService $service)
     {
-        $this->middleware('admin')->except(['inscriptionForm', 'inscriptionStore']);
+        $this->middleware('admin')->except(['showInscriptionForm', 'storeInscription']);
     }
 
     public function index(Request $request)
@@ -83,7 +85,7 @@ class StagiaireController extends Controller
         $validated = $request->validate([
             'nom' => 'required|string|max:255',
             'prenom' => 'required|string|max:255',
-            'matricule' => 'required|string|max:255|unique:stagiaires',
+            'matricule' => 'nullable|string|max:255|unique:stagiaires',
             'date_naissance' => 'nullable|date|before:today',
             'lieu_naissance' => 'nullable|string|max:255',
             'sexe' => 'nullable|in:M,F',
@@ -102,61 +104,37 @@ class StagiaireController extends Controller
             'frais_payes' => 'boolean',
         ]);
 
-        $photoPath = null;
-        if ($request->hasFile('photo')) {
-            $photoPath = $request->file('photo')->store('photos', 'public');
+        $photoPath = $request->hasFile('photo')
+            ? $request->file('photo')->store('photos', 'public')
+            : null;
+
+        try {
+            [$stagiaire, $motDePasse] = $this->service->creer(
+                array_merge($validated, [
+                    'photo'             => $photoPath,
+                    'frais_inscription' => $validated['frais_inscription'] ?? 0,
+                    'frais_payes'       => $validated['frais_payes'] ?? false,
+                ]),
+                Auth::id()
+            );
+        } catch (ValidationException $e) {
+            if ($photoPath) {
+                Storage::disk('public')->delete($photoPath);
+            }
+            throw $e;
         }
 
-        $user = User::create([
-            'name'       => $validated['prenom'] . ' ' . $validated['nom'],
-            'email'      => $validated['email'],
-            'password'   => Hash::make('stagiaire123'),
-            'role'       => 'stagiaire',
-            'is_active'  => true,
-            'created_by' => Auth::id(),
-        ]);
+        // 🔔 Notifier les administrateurs
+        User::where('role', 'administrateur')->get()
+            ->each(fn ($admin) => $admin->notify(new StagiaireCreated($stagiaire)));
 
-        $stagiaire = Stagiaire::create([
-            'user_id'         => $user->id,
-            'nom'             => $validated['nom'],
-            'prenom'          => $validated['prenom'],
-            'matricule'       => $validated['matricule'],
-            'date_naissance'  => $validated['date_naissance'] ?? null,
-            'lieu_naissance'  => $validated['lieu_naissance'] ?? null,
-            'sexe'            => $validated['sexe'] ?? null,
-            'telephone'       => $validated['telephone'] ?? null,
-            'email'           => $validated['email'],
-            'adresse'         => $validated['adresse'] ?? null,
-            'nom_tuteur'      => $validated['nom_tuteur'] ?? null,
-            'telephone_tuteur'=> $validated['telephone_tuteur'] ?? null,
-            'email_tuteur'    => $validated['email_tuteur'] ?? null,
-            'photo'           => $photoPath,
-            'filiere_id'      => $validated['filiere_id'],
-            'classe_id'       => $validated['classe_id'] ?? null,
-            'niveau_id'       => $validated['niveau_id'] ?? null,
-            'date_inscription'=> $validated['date_inscription'] ?? now(),
-            'frais_inscription'=> $validated['frais_inscription'] ?? 0,
-            'frais_payes'     => $validated['frais_payes'] ?? false,
-            'created_by'      => Auth::id(),
-        ]);
-
-        if ($stagiaire->classe_id) {
-            $stagiaire->classe->increment('effectif_actuel');
-        }
-
-        // 🔔 NOTIFICATION : Notifier tous les administrateurs
-        User::where('role', 'administrateur')
-            ->get()
-            ->each(function($admin) use ($stagiaire) {
-                $admin->notify(new StagiaireCreated($stagiaire));
-            });
-
-        return redirect()->route('stagiaires.index')
-            ->with('success', "✅ Le stagiaire {$stagiaire->prenom} {$stagiaire->nom} a été créé avec son compte utilisateur.");
+        return redirect()->route('stagiaires.show', $stagiaire)
+            ->with('success', "✅ {$stagiaire->prenom} {$stagiaire->nom} a été créé. Identifiant : {$stagiaire->email} — mot de passe provisoire : {$motDePasse} (à communiquer au stagiaire, il n'apparaîtra plus).");
     }
 
     public function show(Stagiaire $stagiaire)
     {
+        $stagiaire->load(['inscriptions.anneeScolaire', 'inscriptions.classe', 'inscriptions.niveau', 'parents']);
         $stagiaire->load(['filiere', 'classe', 'niveau', 'notes.matiere', 'absences']);
         
         $stats = [
@@ -188,7 +166,7 @@ class StagiaireController extends Controller
             'lieu_naissance' => 'nullable|string|max:255',
             'sexe' => 'nullable|in:M,F',
             'telephone' => 'nullable|string|max:20',
-            'email' => 'nullable|email|max:255',
+            'email' => 'nullable|email|max:255|unique:users,email,' . ($stagiaire->user_id ?? 'NULL'),
             'adresse' => 'nullable|string|max:500',
             'nom_tuteur' => 'nullable|string|max:255',
             'telephone_tuteur' => 'nullable|string|max:20',
@@ -211,19 +189,26 @@ class StagiaireController extends Controller
             $validated['photo'] = $request->file('photo')->store('photos', 'public');
         }
 
-        $oldClasseId = $stagiaire->classe_id;
-        $newClasseId = $validated['classe_id'] ?? null;
+        DB::transaction(function () use ($stagiaire, $validated) {
+            $this->service->changerClasse(
+                $stagiaire,
+                $validated['classe_id'] ?? null,
+                (int) $validated['filiere_id'],
+                $validated['niveau_id'] ?? null
+            );
 
-        if ($oldClasseId != $newClasseId) {
-            if ($oldClasseId) {
-                Classe::find($oldClasseId)->decrement('effectif_actuel');
-            }
-            if ($newClasseId) {
-                Classe::find($newClasseId)->increment('effectif_actuel');
-            }
-        }
+            $stagiaire->update($validated);
+            $this->service->synchroniser($stagiaire); // inscription de l'année + effectifs
 
-        $stagiaire->update($validated);
+            // Garder le compte utilisateur synchronisé
+            if ($stagiaire->user) {
+                $stagiaire->user->update(array_filter([
+                    'name'      => trim($stagiaire->prenom . ' ' . $stagiaire->nom),
+                    'email'     => $validated['email'] ?? null,
+                    'is_active' => $validated['is_active'] ?? null,
+                ], fn ($v) => $v !== null));
+            }
+        });
 
         // 🔔 NOTIFICATION : Notifier les administrateurs de la modification
         User::where('role', 'administrateur')
@@ -238,15 +223,17 @@ class StagiaireController extends Controller
 
     public function destroy(Stagiaire $stagiaire)
     {
-        if ($stagiaire->photo) {
-            Storage::disk('public')->delete($stagiaire->photo);
+        $photo = $stagiaire->photo;
+
+        try {
+            $this->service->supprimer($stagiaire);
+        } catch (ValidationException $e) {
+            return back()->with('error', $e->validator->errors()->first());
         }
 
-        if ($stagiaire->classe_id) {
-            $stagiaire->classe->decrement('effectif_actuel');
+        if ($photo) {
+            Storage::disk('public')->delete($photo);
         }
-
-        $stagiaire->delete();
 
         return redirect()->route('stagiaires.index')
             ->with('success', 'Stagiaire supprimé avec succès.');
@@ -270,7 +257,16 @@ class StagiaireController extends Controller
             'motif_statut' => 'nullable|string|max:1000',
         ]);
 
-        $stagiaire->update($validated);
+        $actif = $validated['statut'] === 'actif';
+        $stagiaire->update($validated + ['is_active' => $actif || $validated['statut'] === 'diplome']);
+        $this->service->synchroniser($stagiaire); // abandon / transfert libère la place dans la classe
+
+        // L'accès à l'espace stagiaire suit le statut
+        $stagiaire->user?->update([
+            'is_active'    => $actif || $validated['statut'] === 'diplome',
+            'activated_at' => $actif ? now() : $stagiaire->user->activated_at,
+            'activated_by' => $actif ? Auth::id() : $stagiaire->user->activated_by,
+        ]);
 
         // 🔔 NOTIFICATION : Si inscription validée, notifier le stagiaire
         if ($validated['statut'] === 'actif' && $stagiaire->user) {
@@ -279,5 +275,53 @@ class StagiaireController extends Controller
 
         return redirect()->back()
             ->with('success', 'Statut du stagiaire modifié avec succès.');
+    }
+
+    // =========================================================================
+    // INSCRIPTION EN LIGNE (publique)
+    // =========================================================================
+
+    public function showInscriptionForm()
+    {
+        $filieres = Filiere::orderBy('nom')->get();
+        return view('stagiaires.inscription', compact('filieres'));
+    }
+
+    public function storeInscription(Request $request)
+    {
+        // Pot de miel anti-robot : ce champ caché doit rester vide
+        if ($request->filled('site_web')) {
+            return redirect()->route('welcome');
+        }
+
+        $validated = $request->validate([
+            'nom'             => 'required|string|max:255',
+            'prenom'          => 'required|string|max:255',
+            'date_naissance'  => 'nullable|date|before:today',
+            'sexe'            => 'nullable|in:M,F',
+            'telephone'       => 'required|string|max:20',
+            'email'           => 'required|email|max:255|unique:users,email',
+            'adresse'         => 'nullable|string|max:500',
+            'nom_tuteur'      => 'nullable|string|max:255',
+            'telephone_tuteur'=> 'nullable|string|max:20',
+            'photo'           => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
+            'filiere_id'      => 'required|exists:filieres,id',
+        ]);
+
+        $validated['photo'] = $request->hasFile('photo')
+            ? $request->file('photo')->store('photos', 'public')
+            : null;
+
+        // Dossier créé désactivé, en attente de validation par l'administration
+        [$stagiaire] = $this->service->creer($validated + [
+            'statut'       => 'suspendu',
+            'motif_statut' => 'Demande d\'inscription en ligne — à valider',
+        ], null, false);
+
+        User::where('role', 'administrateur')->get()
+            ->each(fn ($admin) => $admin->notify(new StagiaireCreated($stagiaire)));
+
+        return redirect()->route('stagiaires.inscription.form')
+            ->with('success', "Votre demande a bien été envoyée (dossier {$stagiaire->matricule}). L'établissement vous contactera après validation.");
     }
 }

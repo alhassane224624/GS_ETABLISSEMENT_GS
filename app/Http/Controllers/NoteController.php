@@ -70,14 +70,15 @@ class NoteController extends Controller
             abort(403, 'Seuls les professeurs peuvent ajouter des notes.');
         }
 
+        $request->merge(['note_sur' => $request->input('note_sur') ?: 20]);
         $validated = $request->validate([
             'stagiaire_id' => 'required|exists:stagiaires,id',
             'matiere_id' => 'required|exists:matieres,id',
             'classe_id' => 'nullable|exists:classes,id',
             'periode_id' => 'nullable|exists:periodes,id',
-            'note' => 'required|numeric|min:0|max:20',
+            'note' => 'required|numeric|min:0|lte:note_sur',
             'type_note' => 'required|in:ds,cc,examen,tp,projet',
-            'note_sur' => 'nullable|numeric|min:1|max:20',
+            'note_sur' => 'required|numeric|min:1|max:99',
             'commentaire' => 'nullable|string|max:1000'
         ]);
 
@@ -87,6 +88,10 @@ class NoteController extends Controller
         if (empty($validated['classe_id'])) {
             $stagiaire = Stagiaire::findOrFail($validated['stagiaire_id']);
             $validated['classe_id'] = $stagiaire->classe_id;
+        }
+
+        if (Note::periodeVerrouillee($validated['stagiaire_id'], $validated['periode_id'] ?? null)) {
+            return back()->withInput()->with('error', 'Le bulletin de cette période est validé : la note ne peut plus être modifiée. Dévalidez d\'abord le bulletin si une correction est nécessaire.');
         }
 
         $note = Note::create($validated);
@@ -135,14 +140,19 @@ class NoteController extends Controller
             abort(403, 'Non autorisé à modifier cette note.');
         }
 
+        $request->merge(['note_sur' => $request->input('note_sur') ?: 20]);
         $validated = $request->validate([
             'matiere_id' => 'required|exists:matieres,id',
-            'note' => 'required|numeric|min:0|max:20',
+            'note' => 'required|numeric|min:0|lte:note_sur',
             'type_note' => 'required|in:ds,cc,examen,tp,projet',
-            'note_sur' => 'nullable|numeric|min:1|max:20',
+            'note_sur' => 'required|numeric|min:1|max:99',
             'commentaire' => 'nullable|string|max:1000',
             'periode_id' => 'nullable|exists:periodes,id'
         ]);
+
+        if ($note->estVerrouillee() || Note::periodeVerrouillee($note->stagiaire_id, $validated['periode_id'] ?? $note->periode_id)) {
+            return back()->withInput()->with('error', 'Le bulletin de cette période est validé : la note ne peut plus être modifiée. Dévalidez d\'abord le bulletin si une correction est nécessaire.');
+        }
 
         $note->update($validated);
 
@@ -152,12 +162,9 @@ class NoteController extends Controller
 
     public function destroy(Note $note)
     {
-        if (!Auth::user()->isProfesseur()) {
-            abort(403, 'Seuls les professeurs peuvent supprimer les notes.');
-        }
-
-        if ($note->created_by !== Auth::id()) {
-            abort(403, 'Non autorisé à supprimer cette note.');
+        // Route réservée à l'administration (l'ancien contrôle « professeur seulement » rendait la suppression impossible)
+        if ($note->estVerrouillee()) {
+            return back()->with('error', 'Le bulletin de cette période est validé : la note ne peut plus être modifiée. Dévalidez d\'abord le bulletin si une correction est nécessaire.');
         }
 
         $note->delete();
@@ -178,17 +185,21 @@ class NoteController extends Controller
 
         $notes = $query->get();
         
+        // Moyennes ramenées sur 20 et pondérées par le coefficient de la matière
         $moyennes = $notes->groupBy('matiere_id')->map(function ($notesMatiere) {
             return [
                 'matiere' => $notesMatiere->first()->matiere,
-                'moyenne' => $notesMatiere->avg('note'),
+                'moyenne' => $notesMatiere->avg(fn ($n) => $n->note_sur > 0 ? $n->note / $n->note_sur * 20 : 0),
                 'notes' => $notesMatiere
             ];
         });
 
-        $moyenneGenerale = $notes->avg('note');
+        $totalCoef = $moyennes->sum(fn ($m) => $m['matiere']->coefficient ?? 1);
+        $moyenneGenerale = $totalCoef > 0
+            ? $moyennes->sum(fn ($m) => $m['moyenne'] * ($m['matiere']->coefficient ?? 1)) / $totalCoef
+            : null;
 
-        $periodes = Periode::all();
+        $periodes = Periode::with('anneeScolaire')->orderByDesc('debut')->get();
         
         return view('notes.releve', compact('stagiaire', 'notes', 'moyennes', 'moyenneGenerale', 'periodes', 'periode_id'));
     }

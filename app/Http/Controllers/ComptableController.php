@@ -54,13 +54,12 @@ class ComptableController extends Controller
             'montant_retard' => Echeancier::where('statut', 'en_retard')->sum('montant_restant'),
             
             // Échéances à venir (7 jours)
-            'echeances_prochaines' => Echeancier::where('statut', 'impaye')
-                ->whereBetween('date_echeance', [now(), now()->addDays(7)])
+            'echeances_prochaines' => Echeancier::aVenir()
+                ->whereDate('date_echeance', '<=', now()->addDays(7)->toDateString())
                 ->count(),
             
             // Total impayés
-            'total_impayes' => Echeancier::whereIn('statut', ['impaye', 'paye_partiel', 'en_retard'])
-                ->sum('montant_restant'),
+            'total_impayes' => Echeancier::ouverts()->sum('montant_restant'),
             
             // Remises actives
             'remises_actives' => Remise::where('is_active', true)->count(),
@@ -204,7 +203,7 @@ class ComptableController extends Controller
             'nb_echeances' => $stagiaire->echeanciers->count(),
             'nb_retards' => $stagiaire->echeanciers->where('statut', 'en_retard')->count(),
             'nb_paiements' => $stagiaire->paiements->where('statut', 'valide')->count(),
-            'remises_total' => $stagiaire->remises->sum('valeur'),
+            'remises_total' => $stagiaire->echeanciers->sum('montant_remise'),
         ];
 
         return view('comptable.stagiaire-detail', compact('stagiaire', 'stats'));

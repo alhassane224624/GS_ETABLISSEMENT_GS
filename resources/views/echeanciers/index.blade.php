@@ -196,7 +196,7 @@
                                         <br><span class="badge bg-danger">En retard</span>
                                     @endif
                                 </td>
-                                <td><strong>{{ number_format($echeancier->montant, 2) }} DH</strong></td>
+                                <td><strong>{{ number_format($echeancier->montant_net, 2) }} DH</strong>@if($echeancier->montant_remise > 0)<br><small class="text-success">remise {{ number_format($echeancier->montant_remise, 2) }}</small>@endif</td>
                                 <td class="text-success">{{ number_format($echeancier->montant_paye, 2) }} DH</td>
                                 <td class="text-danger">{{ number_format($echeancier->montant_restant, 2) }} DH</td>
                                 <td>

@@ -273,7 +273,7 @@
                         <label class="text-muted small mb-1">Créé par</label>
                         <p class="mb-0">
                             <i class="fas fa-user text-info"></i>
-                            {{ $user->createdBy->name }}
+                            {{ $user->createdBy->name ?? 'Système' }}
                         </p>
                     </div>
                     @endif

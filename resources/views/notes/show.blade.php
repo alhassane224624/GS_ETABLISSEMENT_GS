@@ -200,7 +200,7 @@
                                 </div>
                                 <div class="ms-3 flex-grow-1">
                                     <small class="text-muted d-block">Saisi par</small>
-                                    <h6 class="mb-1">{{ $note->creator->name }}</h6>
+                                    <h6 class="mb-1">{{ $note->creator->name ?? 'Utilisateur supprimé' }}</h6>
                                     <small class="text-muted">
                                         <i class="fas fa-clock me-1"></i>
                                         {{ $note->created_at->format('d/m/Y à H:i') }}

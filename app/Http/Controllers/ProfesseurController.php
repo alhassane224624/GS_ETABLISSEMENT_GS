@@ -180,11 +180,12 @@ class ProfesseurController extends Controller
                 ->with('error', 'Accès non autorisé à ce stagiaire.');
         }
 
+        $request->merge(['note_sur' => $request->input('note_sur') ?: 20]);
         $validated = $request->validate([
             'matiere_id'  => 'required|exists:matieres,id',
-            'note'        => 'required|numeric|min:0|max:20',
+            'note'        => 'required|numeric|min:0|lte:note_sur',
             'type_note'   => 'required|in:ds,cc,examen,tp,projet',
-            'note_sur'    => 'nullable|numeric|min:1|max:100',
+            'note_sur'    => 'required|numeric|min:1|max:99',
             'commentaire' => 'nullable|string|max:1000',
         ]);
 
@@ -195,6 +196,12 @@ class ProfesseurController extends Controller
 
         // Période active
         $periodeActive = Periode::where('is_active', true)->first();
+        if (!$periodeActive) {
+            return back()->withInput()->with('error', 'Aucune période active : demandez à l\'administration d\'activer la période en cours.');
+        }
+        if (Note::periodeVerrouillee($stagiaire->id, $periodeActive->id)) {
+            return back()->with('error', 'Le bulletin de cette période est validé : la note ne peut plus être modifiée. Dévalidez d\'abord le bulletin si une correction est nécessaire.');
+        }
 
         Note::create([
             'stagiaire_id' => $stagiaire->id,
@@ -226,16 +233,21 @@ class ProfesseurController extends Controller
             return back()->with('error', 'Vous n\'êtes pas autorisé à modifier cette note.');
         }
 
+        $request->merge(['note_sur' => $request->input('note_sur') ?: 20]);
         $validated = $request->validate([
             'matiere_id'  => 'required|exists:matieres,id',
-            'note'        => 'required|numeric|min:0|max:20',
+            'note'        => 'required|numeric|min:0|lte:note_sur',
             'type_note'   => 'required|in:ds,cc,examen,tp,projet',
-            'note_sur'    => 'nullable|numeric|min:1|max:100',
+            'note_sur'    => 'required|numeric|min:1|max:99',
             'commentaire' => 'nullable|string|max:1000',
         ]);
 
         if (!$user->canTeachMatiere($validated['matiere_id'])) {
             return back()->with('error', 'Vous n\'êtes pas autorisé à modifier une note pour cette matière.');
+        }
+
+        if ($note->estVerrouillee()) {
+            return back()->with('error', 'Le bulletin de cette période est validé : la note ne peut plus être modifiée. Dévalidez d\'abord le bulletin si une correction est nécessaire.');
         }
 
         $note->update([
@@ -450,8 +462,8 @@ class ProfesseurController extends Controller
             'stagiaire_id' => 'required|exists:stagiaires,id',
             'date'         => 'required|date',
             'type'         => 'required|in:matin,apres_midi,journee,heure',
-            'heure_debut'  => 'nullable|date_format:H:i',
-            'heure_fin'    => 'nullable|date_format:H:i',
+            'heure_debut'  => 'required_if:type,heure|nullable|date_format:H:i',
+            'heure_fin'    => 'required_if:type,heure|nullable|date_format:H:i|after:heure_debut',
             'motif'        => 'nullable|string|max:500',
         ]);
 
@@ -464,26 +476,22 @@ class ProfesseurController extends Controller
             return back()->with('error', 'Accès refusé à ce stagiaire.');
         }
 
-        // Unicité sur la date
-        $existingAbsence = Absence::where('stagiaire_id', $validated['stagiaire_id'])
-            ->whereDate('date', $validated['date'])
-            ->first();
-
-        if ($existingAbsence) {
-            return back()->with('error', 'Une absence est déjà enregistrée pour cette date.');
+        // Pas de chevauchement (matin + après-midi possibles le même jour)
+        if (Absence::chevauche($stagiaire->id, $validated['date'], $validated['type'], $validated['heure_debut'] ?? null, $validated['heure_fin'] ?? null)) {
+            return back()->with('error', 'Une absence couvrant ce créneau est déjà enregistrée pour cette date.');
         }
 
-       Absence::create([
-    'stagiaire_id' => $validated['stagiaire_id'],
-    'date'         => $validated['date'],
-    'type'         => $validated['type'],
-    'heure_debut'  => $validated['heure_debut'] ?? null, // ✅ Correction ici
-    'heure_fin'    => $validated['heure_fin'] ?? null,   // ✅ Et ici
-    'motif'        => $validated['motif'] ?? null,
-    'justifiee'    => false,
-    'created_by'   => $user->id,
-]);
-
+        Absence::create([
+            'stagiaire_id' => $stagiaire->id,
+            'periode_id'   => Absence::periodePourDate($validated['date']),
+            'date'         => $validated['date'],
+            'type'         => $validated['type'],
+            'heure_debut'  => $validated['heure_debut'] ?? null,
+            'heure_fin'    => $validated['heure_fin'] ?? null,
+            'motif'        => $validated['motif'] ?? null,
+            'justifiee'    => false,
+            'created_by'   => $user->id,
+        ]);
 
         return back()->with('success', 'Absence enregistrée avec succès.');
     }
@@ -569,6 +577,11 @@ class ProfesseurController extends Controller
             return back()->with('error', 'Vous n\'avez pas accès à cette classe.');
         }
 
+        // Matière enseignée par le professeur
+        if (!$user->canTeachMatiere($validated['matiere_id'])) {
+            return back()->withInput()->with('error', 'Vous ne pouvez planifier que les matières qui vous sont affectées.');
+        }
+
         // Disponibilité de la salle
         $salle = Salle::findOrFail($validated['salle_id']);
         $isDisponible = $salle->isDisponible(
@@ -603,7 +616,8 @@ class ProfesseurController extends Controller
 
     public function editFilieres(User $professeur)
     {
-        $filieres = Filiere::all();
+        $professeur->load('filieres');
+        $filieres = Filiere::orderBy('nom')->get();
         return view('professeurs.filieres', compact('professeur', 'filieres'));
     }
 
@@ -614,7 +628,22 @@ class ProfesseurController extends Controller
             'filieres.*' => 'exists:filieres,id',
         ]);
 
-        $professeur->filieres()->sync($request->input('filieres', []));
+        abort_unless($professeur->role === 'professeur', 404);
+
+        $sync = [];
+        foreach ($request->input('filieres', []) as $filiereId) {
+            $sync[$filiereId] = [
+                'created_by'       => Auth::id(),
+                'is_active'        => true,
+                'date_assignation' => now()->toDateString(),
+            ];
+        }
+
+        // syncWithoutDetaching ne touche pas aux pivots existants ; on détache ensuite les filières retirées
+        $professeur->filieres()->syncWithoutDetaching($sync);
+        $professeur->filieres()->detach(
+            $professeur->filieres()->pluck('filieres.id')->diff(array_keys($sync))->all()
+        );
 
         return redirect()->route('users.index')
             ->with('success', 'Filières mises à jour avec succès.');
@@ -632,7 +661,7 @@ class ProfesseurController extends Controller
     public function updateMatieres(Request $request, User $professeur)
     {
         $request->validate([
-            'matieres'   => 'required|array',
+            'matieres'   => 'nullable|array',
             'matieres.*' => 'exists:matieres,id',
             'filiere_id' => 'required|exists:filieres,id',
         ]);
@@ -643,13 +672,29 @@ class ProfesseurController extends Controller
                 'filiere_id'      => $request->filiere_id,
                 'assigned_by'     => Auth::id(),
                 'is_active'       => true,
-                'date_assignation'=> now(),
+                'date_assignation'=> now()->toDateString(),
             ];
         }
 
-        $professeur->matieresEnseignees()->sync($sync);
+        abort_unless($professeur->role === 'professeur', 404);
 
-        return redirect()->route('users.index')
+        // On ne remplace que les affectations de la filière choisie
+        $professeur->matieresEnseignees()
+            ->wherePivot('filiere_id', $request->filiere_id)
+            ->sync($sync);
+
+        // Le professeur doit aussi être rattaché à la filière
+        if (!empty($sync)) {
+            $professeur->filieres()->syncWithoutDetaching([
+                $request->filiere_id => [
+                    'created_by'       => Auth::id(),
+                    'is_active'        => true,
+                    'date_assignation' => now()->toDateString(),
+                ],
+            ]);
+        }
+
+        return redirect()->route('professeurs.matieres.edit', [$professeur, 'filiere_id' => $request->filiere_id])
             ->with('success', 'Matières mises à jour avec succès.');
     }
 }

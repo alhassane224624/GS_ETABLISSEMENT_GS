@@ -60,6 +60,17 @@
                         @csrf
                         @method('PUT')
 
+                        <!-- Type -->
+                        <div class="mb-3">
+                            <label for="type" class="form-label required">Type</label>
+                            <select name="type" id="type" class="form-select @error('type') is-invalid @enderror">
+                                @foreach (\App\Models\Echeancier::TYPES as $cle => $libelle)
+                                    <option value="{{ $cle }}" @selected(old('type', $echeancier->type ?? 'mensualite') === $cle)>{{ $libelle }}</option>
+                                @endforeach
+                            </select>
+                            <small class="text-muted">Les remises « mensualités uniquement » ne s'appliquent qu'au type Mensualité.</small>
+                        </div>
+
                         <!-- Titre -->
                         <div class="mb-3">
                             <label for="titre" class="form-label required">Titre de l'échéancier</label>

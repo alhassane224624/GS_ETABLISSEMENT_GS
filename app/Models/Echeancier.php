@@ -5,17 +5,33 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * Une échéance = une somme due par un stagiaire à une date.
+ *   montant_restant = montant - montant_remise - montant_paye
+ * Le statut est TOUJOURS déduit des montants et de la date (voir recalculer()).
+ */
 class Echeancier extends Model
 {
     use HasFactory;
 
     protected $table = 'echeanciers';
 
+    public const TYPES = [
+        'inscription' => 'Frais d\'inscription',
+        'mensualite'  => 'Mensualité',
+        'examen'      => 'Frais d\'examen',
+        'autre'       => 'Autre',
+    ];
+
+    public const STATUTS_OUVERTS = ['impaye', 'paye_partiel', 'en_retard'];
+
     protected $fillable = [
         'stagiaire_id',
         'annee_scolaire_id',
         'titre',
+        'type',
         'montant',
+        'montant_remise',
         'date_echeance',
         'statut',
         'montant_paye',
@@ -26,6 +42,7 @@ class Echeancier extends Model
 
     protected $casts = [
         'montant' => 'decimal:2',
+        'montant_remise' => 'decimal:2',
         'montant_paye' => 'decimal:2',
         'montant_restant' => 'decimal:2',
         'date_echeance' => 'date',
@@ -52,24 +69,24 @@ class Echeancier extends Model
     }
 
     // ------------------ SCOPES ------------------
+    public function scopeOuverts($query)
+    {
+        return $query->whereIn('statut', self::STATUTS_OUVERTS)->where('montant_restant', '>', 0);
+    }
+
     public function scopeImpayes($query)
     {
-        return $query->where('statut', 'impaye');
+        return $query->ouverts();
     }
 
     public function scopeEnRetard($query)
     {
-        return $query->where('statut', 'en_retard')
-            ->orWhere(function ($q) {
-                $q->where('statut', 'impaye')
-                  ->where('date_echeance', '<', now());
-            });
+        return $query->ouverts()->whereDate('date_echeance', '<', now()->toDateString());
     }
 
     public function scopeAVenir($query)
     {
-        return $query->where('date_echeance', '>', now())
-            ->where('statut', 'impaye');
+        return $query->ouverts()->whereDate('date_echeance', '>=', now()->toDateString());
     }
 
     // ------------------ ACCESSORS ------------------
@@ -84,32 +101,74 @@ class Echeancier extends Model
         };
     }
 
+    public function getStatutCouleurAttribute()
+    {
+        return match ($this->statut) {
+            'paye' => 'success',
+            'paye_partiel' => 'info',
+            'en_retard' => 'danger',
+            default => 'warning',
+        };
+    }
+
+    public function getTypeLibelleAttribute()
+    {
+        return self::TYPES[$this->type] ?? 'Autre';
+    }
+
+    /** Montant réellement dû après remise */
+    public function getMontantNetAttribute()
+    {
+        return round((float) $this->montant - (float) $this->montant_remise, 2);
+    }
+
     public function getIsEnRetardAttribute()
     {
-        return $this->date_echeance < now() && in_array($this->statut, ['impaye', 'paye_partiel']);
+        return $this->montant_restant > 0 && $this->date_echeance && $this->date_echeance->lt(now()->startOfDay());
     }
 
     // ------------------ MÉTHODES MÉTIER ------------------
-    public function affecterPaiement(Paiement $paiement, $montant)
+
+    /**
+     * Recalcule montant payé (à partir des imputations de paiements VALIDÉS),
+     * montant restant et statut. À appeler après toute modification.
+     */
+    public function recalculer(): self
     {
-        $this->paiements()->attach($paiement->id, ['montant_affecte' => $montant]);
+        $paye = (float) $this->paiements()->where('paiements.statut', 'valide')->sum('echeancier_paiement.montant_affecte');
+        $remise = min((float) $this->montant_remise, max(0, (float) $this->montant - $paye));
 
-        $this->montant_paye += $montant;
-        $this->montant_restant = $this->montant - $this->montant_paye;
-
-        if ($this->montant_restant <= 0) {
-            $this->statut = 'paye';
-        } elseif ($this->montant_paye > 0) {
-            $this->statut = 'paye_partiel';
-        }
-
+        $this->montant_remise = $remise;
+        $this->montant_paye = $paye;
+        $this->montant_restant = max(0, round((float) $this->montant - $remise - $paye, 2));
+        $this->statut = $this->calculerStatut();
         $this->save();
+
+        return $this;
     }
 
-    public function verifierRetard()
+    public function calculerStatut(): string
     {
-        if ($this->date_echeance < now() && in_array($this->statut, ['impaye', 'paye_partiel'])) {
-            $this->update(['statut' => 'en_retard']);
+        if ((float) $this->montant_restant <= 0) {
+            return 'paye';
         }
+        if ($this->date_echeance && $this->date_echeance->lt(now()->startOfDay())) {
+            return 'en_retard';
+        }
+        return (float) $this->montant_paye > 0 ? 'paye_partiel' : 'impaye';
+    }
+
+    /** Imputation d'une partie d'un paiement validé */
+    public function affecterPaiement(Paiement $paiement, $montant): void
+    {
+        $this->paiements()->attach($paiement->id, ['montant_affecte' => $montant]);
+        $this->recalculer();
+    }
+
+    /** Retire l'imputation d'un paiement (refus tardif, annulation) */
+    public function annulerAffectation(Paiement $paiement): void
+    {
+        $this->paiements()->detach($paiement->id);
+        $this->recalculer();
     }
 }

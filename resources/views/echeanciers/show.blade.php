@@ -52,8 +52,8 @@
                                     </td>
                                 </tr>
                                 <tr>
-                                    <th>Montant Total:</th>
-                                    <td><strong class="text-primary fs-5">{{ number_format($echeancier->montant, 2) }} DH</strong></td>
+                                    <th>Montant :</th>
+                                    <td><strong class="text-primary fs-5">{{ number_format($echeancier->montant, 2) }} DH</strong>@if($echeancier->montant_remise > 0) <span class="text-success ms-2">− {{ number_format($echeancier->montant_remise, 2) }} DH de remise</span>@endif</td>
                                 </tr>
                                 <tr>
                                     <th>Montant Payé:</th>
@@ -68,7 +68,7 @@
                                     <td>
                                         <div class="progress" style="height: 20px;">
                                             @php
-                                                $progression = $echeancier->montant > 0 ? ($echeancier->montant_paye / $echeancier->montant) * 100 : 0;
+                                                $progression = $echeancier->montant_net > 0 ? min(100, ($echeancier->montant_paye / $echeancier->montant_net) * 100) : 100;
                                             @endphp
                                             <div class="progress-bar {{ $progression == 100 ? 'bg-success' : 'bg-warning' }}" 
                                                 role="progressbar" 
@@ -155,19 +155,9 @@
                                     @foreach($echeancier->paiements as $paiement)
                                     <tr>
                                         <td>{{ \Carbon\Carbon::parse($paiement->date_paiement)->format('d/m/Y H:i') }}</td>
-                                        <td><strong class="text-success">{{ number_format($paiement->montant, 2) }} DH</strong></td>
-                                        <td>
-                                            @if($paiement->mode_paiement === 'espece')
-                                                <span class="badge bg-success">Espèce</span>
-                                            @elseif($paiement->mode_paiement === 'cheque')
-                                                <span class="badge bg-primary">Chèque</span>
-                                            @elseif($paiement->mode_paiement === 'virement')
-                                                <span class="badge bg-info">Virement</span>
-                                            @else
-                                                <span class="badge bg-secondary">{{ $paiement->mode_paiement }}</span>
-                                            @endif
-                                        </td>
-                                        <td>{{ $paiement->reference ?? '-' }}</td>
+                                        <td><strong class="text-success">{{ number_format($paiement->pivot->montant_affecte, 2) }} DH</strong>@if($paiement->montant != $paiement->pivot->montant_affecte)<br><small class="text-muted">sur {{ number_format($paiement->montant, 2) }} DH</small>@endif</td>
+                                        <td><span class="badge bg-{{ $paiement->statut_couleur }}">{{ $paiement->methode_libelle }}</span></td>
+                                        <td>{{ $paiement->reference_externe ?? $paiement->numero_transaction }}</td>
                                         <td>
                                             <small>{{ $paiement->user->name ?? 'N/A' }}</small>
                                         </td>

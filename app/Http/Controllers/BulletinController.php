@@ -9,6 +9,7 @@ use App\Models\Periode;
 use App\Models\Note;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use PDF;
 
 // 🔔 AJOUT : Importer la notification
@@ -96,27 +97,55 @@ class BulletinController extends Controller
         $classe = Classe::with('stagiaires')->findOrFail($validated['classe_id']);
         $periode = Periode::findOrFail($validated['periode_id']);
 
-        $generated = 0;
-        
-        foreach ($classe->stagiaires as $stagiaire) {
-            $exists = Bulletin::where('stagiaire_id', $stagiaire->id)
-                ->where('periode_id', $periode->id)
-                ->exists();
+        // 1. Calcul de toutes les moyennes de la classe en une seule passe
+        $resultats = $this->calculerMoyennesClasse($classe, $periode);
 
-            if (!$exists) {
-                $bulletin = $this->generateBulletinForStagiaire($stagiaire, $classe, $periode);
-                
-                // 🔔 Note : Ne pas notifier lors de la génération, seulement lors de la validation
-                // if ($bulletin && $stagiaire->user) {
-                //     $stagiaire->user->notify(new BulletinGenerated($bulletin));
-                // }
-                
-                $generated++;
-            }
+        if ($resultats->isEmpty()) {
+            return back()->with('error', 'Aucune note saisie pour cette classe sur cette période.');
         }
 
+        // 2. Classement (ex æquo gérés : même moyenne = même rang)
+        $classement = $this->calculerRangs($resultats);
+        $total = $resultats->count();
+
+        $generated = 0;
+        $updated = 0;
+
+        DB::transaction(function () use ($resultats, $classement, $total, $classe, $periode, &$generated, &$updated) {
+            foreach ($resultats as $stagiaireId => $res) {
+                $rang = $classement[$stagiaireId];
+                $bulletin = Bulletin::where('stagiaire_id', $stagiaireId)
+                    ->where('periode_id', $periode->id)
+                    ->first();
+
+                $donnees = [
+                    'classe_id' => $classe->id,
+                    'moyenne_generale' => $res['moyenne'],
+                    'rang' => $rang,
+                    'total_classe' => $total,
+                    'appreciation_generale' => $this->genererAppreciation($res['moyenne'], $rang, $total),
+                    'moyennes_matieres' => $res['matieres'],
+                ];
+
+                if (!$bulletin) {
+                    Bulletin::create($donnees + [
+                        'stagiaire_id' => $stagiaireId,
+                        'periode_id' => $periode->id,
+                        'created_by' => Auth::id(),
+                        'validated_at' => null,
+                        'validated_by' => null,
+                    ]);
+                    $generated++;
+                } elseif (!$bulletin->validated_at) {
+                    // Les bulletins non validés sont recalculés (notes ajoutées depuis)
+                    $bulletin->update($donnees);
+                    $updated++;
+                }
+            }
+        });
+
         return redirect()->back()
-            ->with('success', "{$generated} bulletin(s) généré(s) avec succès. Pensez à les valider !");
+            ->with('success', "{$generated} bulletin(s) généré(s), {$updated} recalculé(s). Pensez à les valider !");
     }
 
     /**
@@ -170,6 +199,29 @@ class BulletinController extends Controller
     /**
      * ✅ NOUVEAU : Valide plusieurs bulletins en une seule fois
      */
+    /**
+     * Rouvre un bulletin validé (correction de note). Le stagiaire ne le voit plus
+     * jusqu'à la nouvelle validation ; régénérer les bulletins le recalcule.
+     */
+    public function invalidateBulletin(Request $request, Bulletin $bulletin)
+    {
+        $request->validate(['motif' => 'required|string|max:500']);
+
+        if (!$bulletin->validated_at) {
+            return back()->with('error', 'Ce bulletin n\'est pas validé.');
+        }
+
+        $bulletin->update(['validated_at' => null, 'validated_by' => null]);
+
+        \Illuminate\Support\Facades\Log::info('Bulletin dévalidé', [
+            'bulletin_id' => $bulletin->id,
+            'par' => Auth::id(),
+            'motif' => $request->motif,
+        ]);
+
+        return back()->with('success', 'Bulletin rouvert : corrigez les notes, régénérez les bulletins de la classe puis validez à nouveau.');
+    }
+
     public function validateMultiple(Request $request)
     {
         $validated = $request->validate([
@@ -207,102 +259,73 @@ class BulletinController extends Controller
      * Génère un bulletin pour un stagiaire spécifique
      * @private
      */
-    private function generateBulletinForStagiaire(Stagiaire $stagiaire, Classe $classe, Periode $periode)
+    /**
+     * Calcule, pour chaque stagiaire de la classe, la moyenne par matière et la
+     * moyenne générale pondérée. Toutes les notes sont ramenées sur 20
+     * (une note de 8/10 compte 16/20).
+     *
+     * @return \Illuminate\Support\Collection [stagiaire_id => ['moyenne' => float, 'matieres' => array]]
+     */
+    private function calculerMoyennesClasse(Classe $classe, Periode $periode)
     {
-        $notes = Note::where('stagiaire_id', $stagiaire->id)
+        $notes = Note::whereIn('stagiaire_id', $classe->stagiaires->pluck('id'))
             ->where('periode_id', $periode->id)
             ->with('matiere')
-            ->get();
+            ->get()
+            ->groupBy('stagiaire_id');
 
-        if ($notes->isEmpty()) {
-            return null;
-        }
+        return $notes->map(function ($notesStagiaire) {
+            $matieres = $notesStagiaire->groupBy('matiere_id')->map(function ($notesMatiere) {
+                $matiere = $notesMatiere->first()->matiere;
+                if (!$matiere) {
+                    return null;
+                }
 
-        $moyennesParMatiere = $notes->groupBy('matiere_id')->map(function ($notesMatiere) {
-            $matiere = $notesMatiere->first()->matiere;
-            
-            if (!$matiere) {
-                return null;
-            }
-            
-            $moyenne = $notesMatiere->avg('note');
-            
-            return [
-                'matiere' => $matiere->nom ?? 'N/A',
-                'code' => $matiere->code ?? 'N/A',
-                'coefficient' => $matiere->coefficient ?? 1,
-                'moyenne' => round($moyenne, 2),
-                'note_sur' => 20
-            ];
-        })->filter();
+                $moyenne = $notesMatiere->avg(function ($n) {
+                    $sur = (float) ($n->note_sur ?: 20);
+                    return $sur > 0 ? ($n->note / $sur) * 20 : 0;
+                });
 
-        $totalPoints = 0;
-        $totalCoefficients = 0;
-        
-        foreach ($moyennesParMatiere as $moyenneMatiere) {
-            $totalPoints += $moyenneMatiere['moyenne'] * $moyenneMatiere['coefficient'];
-            $totalCoefficients += $moyenneMatiere['coefficient'];
-        }
-
-        $moyenneGenerale = $totalCoefficients > 0 ? 
-            round($totalPoints / $totalCoefficients, 2) : 0;
-
-        // Calculer le rang dans la classe
-        $stagiairesDeLaClasse = $classe->stagiaires()
-            ->whereHas('notes', function($q) use ($periode) {
-                $q->where('periode_id', $periode->id);
-            })
-            ->get();
-
-        $moyennesClasse = $stagiairesDeLaClasse->map(function ($s) use ($periode) {
-            $notesS = Note::where('stagiaire_id', $s->id)
-                ->where('periode_id', $periode->id)
-                ->with('matiere')
-                ->get();
-
-            $moyennesS = $notesS->groupBy('matiere_id')->map(function ($nm) {
-                $matiere = $nm->first()->matiere;
-                if (!$matiere) return null;
-                
                 return [
-                    'moyenne' => $nm->avg('note'),
-                    'coefficient' => $matiere->coefficient ?? 1
+                    'matiere' => $matiere->nom ?? 'N/A',
+                    'code' => $matiere->code ?? 'N/A',
+                    'coefficient' => $matiere->coefficient ?: 1,
+                    'moyenne' => round($moyenne, 2),
+                    'note_sur' => 20,
                 ];
-            })->filter();
+            })->filter()->values();
 
-            $totalP = 0;
-            $totalC = 0;
-            foreach ($moyennesS as $m) {
-                $totalP += $m['moyenne'] * $m['coefficient'];
-                $totalC += $m['coefficient'];
-            }
+            $totalCoef = $matieres->sum('coefficient');
+            $totalPoints = $matieres->sum(fn ($m) => $m['moyenne'] * $m['coefficient']);
 
             return [
-                'stagiaire_id' => $s->id,
-                'moyenne' => $totalC > 0 ? $totalP / $totalC : 0
+                'moyenne' => $totalCoef > 0 ? round($totalPoints / $totalCoef, 2) : 0,
+                'matieres' => $matieres->toArray(),
             ];
-        })->sortByDesc('moyenne')->values();
+        });
+    }
 
-        $rang = $moyennesClasse->search(function ($item) use ($stagiaire) {
-            return $item['stagiaire_id'] === $stagiaire->id;
-        }) + 1;
+    /**
+     * Rang de chaque stagiaire (classement « olympique » : 1, 2, 2, 4)
+     */
+    private function calculerRangs($resultats): array
+    {
+        $tries = $resultats->sortByDesc('moyenne');
+        $rangs = [];
+        $position = 0;
+        $rangCourant = 0;
+        $precedente = null;
 
-        $appreciation = $this->genererAppreciation($moyenneGenerale, $rang, $stagiairesDeLaClasse->count());
+        foreach ($tries as $stagiaireId => $res) {
+            $position++;
+            if ($precedente === null || $res['moyenne'] < $precedente) {
+                $rangCourant = $position;
+            }
+            $rangs[$stagiaireId] = $rangCourant;
+            $precedente = $res['moyenne'];
+        }
 
-        return Bulletin::create([
-            'stagiaire_id' => $stagiaire->id,
-            'classe_id' => $classe->id,
-            'periode_id' => $periode->id,
-            'moyenne_generale' => $moyenneGenerale,
-            'rang' => $rang,
-            'total_classe' => $stagiairesDeLaClasse->count(),
-            'appreciation_generale' => $appreciation,
-            'moyennes_matieres' => $moyennesParMatiere->values()->toArray(),
-            'created_by' => Auth::id(),
-            // ✅ Important : Le bulletin n'est PAS validé automatiquement
-            'validated_at' => null,
-            'validated_by' => null,
-        ]);
+        return $rangs;
     }
 
     /**

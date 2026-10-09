@@ -1,499 +1,215 @@
 @extends(auth()->user()->role === 'comptable' ? 'layouts.comptable' : 'layouts.app')
 
-@section('title', 'Enregistrer un Paiement')
+@section('title', 'Encaisser un paiement')
 
 @section('content')
-<div class="container-fluid py-4">
-    <!-- En-tête -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <h2 class="mb-1">
-                        <i class="fas fa-cash-register text-primary me-2"></i>
-                        Enregistrer un Paiement
-                    </h2>
-                    <p class="text-muted mb-0">Enregistrez un nouveau paiement pour un stagiaire</p>
+@php $dh = fn ($m) => number_format((float) $m, 2, ',', ' ') . ' DH'; @endphp
+
+<div class="container-fluid py-3">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="mb-0"><i class="fas fa-cash-register text-primary me-2"></i>Encaisser un paiement</h4>
+        <a href="{{ route('paiements.index') }}" class="btn btn-outline-secondary"><i class="fas fa-arrow-left me-1"></i>Retour</a>
+    </div>
+
+    @if ($errors->any())
+        <div class="alert alert-danger"><ul class="mb-0">@foreach ($errors->all() as $e)<li>{{ $e }}</li>@endforeach</ul></div>
+    @endif
+
+    {{-- 1. Choix du stagiaire (recharge la page avec ses échéances) --}}
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <form method="GET" action="{{ route('paiements.create') }}">
+                <label class="form-label fw-semibold">1. Stagiaire</label>
+                <select name="stagiaire_id" class="form-select form-select-lg" onchange="this.form.submit()" required>
+                    <option value="">— Choisir un stagiaire —</option>
+                    @foreach ($stagiaires as $s)
+                        <option value="{{ $s->id }}" @selected(optional($stagiaire)->id === $s->id)>{{ $s->nom }} {{ $s->prenom }} — {{ $s->matricule }}</option>
+                    @endforeach
+                </select>
+            </form>
+
+            @if ($stagiaire)
+                <div class="row g-3 mt-2">
+                    <div class="col-md-3"><small class="text-muted d-block">Filière / classe</small><strong>{{ $stagiaire->filiere->nom ?? '—' }}</strong> <span class="text-muted">{{ $stagiaire->classe->nom ?? '' }}</span></div>
+                    <div class="col-md-3"><small class="text-muted d-block">Reste à payer</small><strong class="text-danger">{{ $dh($echeances->sum('montant_restant')) }}</strong></div>
+                    <div class="col-md-3"><small class="text-muted d-block">Déjà en attente d'encaissement</small><strong class="text-warning">{{ $dh($enAttente->sum('montant')) }}</strong></div>
+                    <div class="col-md-3"><small class="text-muted d-block">Montant encaissable</small><strong class="text-success fs-5">{{ $dh($encaissable) }}</strong></div>
                 </div>
-                <a href="{{ route('paiements.index') }}" class="btn btn-outline-secondary">
-                    <i class="fas fa-arrow-left me-2"></i>Retour à la liste
-                </a>
-            </div>
+            @endif
         </div>
     </div>
 
-    <form method="POST" action="{{ route('paiements.store') }}" enctype="multipart/form-data">
-        @csrf
-        
-        <div class="row g-4">
-            {{-- Colonne principale --}}
-            <div class="col-lg-8">
-                {{-- Sélection du stagiaire --}}
-                <div class="card border-0 shadow-sm mb-4">
-                    <div class="card-header bg-gradient-primary text-white border-0">
-                        <h5 class="mb-0 d-flex align-items-center">
-                            <div class="icon-shape bg-white bg-opacity-25 rounded me-3">
-                                <i class="fas fa-user-graduate"></i>
-                            </div>
-                            Informations du Stagiaire
-                        </h5>
-                    </div>
-                    <div class="card-body p-4">
-                        <div class="mb-4">
-                            <label class="form-label fw-semibold">
-                                Sélectionner un stagiaire 
-                                <span class="text-danger">*</span>
-                            </label>
-                            <select name="stagiaire_id" 
-                                    id="stagiaireSelect" 
-                                    class="form-select form-select-lg @error('stagiaire_id') is-invalid @enderror" 
-                                    required>
-                                <option value="">-- Choisir un stagiaire --</option>
-                                @foreach($stagiaires as $s)
-                                <option value="{{ $s->id }}" 
-                                        data-filiere="{{ $s->filiere->nom ?? 'N/A' }}"
-                                        data-matricule="{{ $s->matricule }}"
-                                        data-solde="{{ $s->solde_restant }}"
-                                        {{ old('stagiaire_id', $stagiaire->id ?? '') == $s->id ? 'selected' : '' }}>
-                                    {{ $s->nom_complet }} - {{ $s->matricule }}
-                                </option>
-                                @endforeach
-                            </select>
-                            @error('stagiaire_id')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
+    @if ($stagiaire)
+        @if ($enAttente->isNotEmpty())
+            <div class="alert alert-warning">
+                <i class="fas fa-hourglass-half me-1"></i>
+                Paiement(s) en attente pour ce stagiaire :
+                @foreach ($enAttente as $p)
+                    <a href="{{ route('paiements.show', $p) }}" class="alert-link">{{ $p->numero_transaction }}</a> ({{ $dh($p->montant) }}, {{ mb_strtolower($p->methode_libelle) }}){{ !$loop->last ? ',' : '.' }}
+                @endforeach
+                Ils sont déduits du montant encaissable.
+            </div>
+        @endif
 
-                        {{-- Informations du stagiaire sélectionné --}}
-                        <div id="stagiaireInfo" class="d-none">
-                            <div class="alert alert-info border-0 shadow-sm" role="alert">
-                                <div class="row g-3">
-                                    <div class="col-md-4">
-                                        <div class="d-flex align-items-center">
-                                            <i class="fas fa-graduation-cap text-primary me-2"></i>
-                                            <div>
-                                                <small class="text-muted d-block">Filière</small>
-                                                <strong id="infoFiliere">-</strong>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <div class="d-flex align-items-center">
-                                            <i class="fas fa-id-card text-primary me-2"></i>
-                                            <div>
-                                                <small class="text-muted d-block">Matricule</small>
-                                                <strong id="infoMatricule">-</strong>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <div class="d-flex align-items-center">
-                                            <i class="fas fa-wallet text-danger me-2"></i>
-                                            <div>
-                                                <small class="text-muted d-block">Solde restant</small>
-                                                <strong class="text-danger fs-5" id="infoSolde">-</strong>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+        @if ($echeances->isEmpty())
+            <div class="alert alert-info d-flex justify-content-between align-items-center">
+                <span><i class="fas fa-info-circle me-1"></i>Ce stagiaire n'a aucune échéance à régler. Un paiement doit toujours correspondre à une échéance (inscription, mensualité, examen…).</span>
+                <a href="{{ route('echeanciers.create', ['stagiaire_id' => $stagiaire->id]) }}" class="btn btn-sm btn-primary">Créer une échéance</a>
+            </div>
+        @else
+            <form method="POST" action="{{ route('paiements.store') }}" enctype="multipart/form-data" id="form-paiement">
+                @csrf
+                <input type="hidden" name="stagiaire_id" value="{{ $stagiaire->id }}">
 
-                        @if($stagiaire)
-                        {{-- Échéanciers impayés --}}
-                        <div class="mt-4">
-                            <h6 class="mb-3 d-flex align-items-center">
-                                <i class="fas fa-calendar-alt text-warning me-2"></i>
-                                Échéanciers à payer
-                            </h6>
-                            @if($stagiaire->echeanciersImpayes->count() > 0)
-                                <div class="table-responsive">
-                                    <table class="table table-hover align-middle">
-                                        <thead class="table-light">
-                                            <tr>
-                                                <th width="50">
-                                                    <input type="checkbox" id="selectAll" class="form-check-input">
-                                                </th>
-                                                <th>Titre</th>
-                                                <th>Échéance</th>
-                                                <th>Montant</th>
-                                                <th>Statut</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach($stagiaire->echeanciersImpayes as $ech)
+                <div class="row g-4">
+                    {{-- 2. Échéances --}}
+                    <div class="col-lg-7">
+                        <div class="card shadow-sm h-100">
+                            <div class="card-header bg-white fw-semibold">2. Échéances réglées <small class="text-muted fw-normal">(facultatif)</small></div>
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width: 40px;"><input type="checkbox" class="form-check-input" id="tout-cocher"></th>
+                                            <th>Échéance</th><th>Date</th><th class="text-end">Reste dû</th><th>Statut</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach ($echeances as $e)
                                             <tr>
                                                 <td>
-                                                    <input type="checkbox" 
-                                                           name="echeanciers[]" 
-                                                           value="{{ $ech->id }}" 
-                                                           class="form-check-input echeancier-checkbox">
+                                                    <input type="checkbox" name="echeanciers[]" value="{{ $e->id }}" class="form-check-input case-echeance"
+                                                           data-reste="{{ $e->montant_restant }}" @checked(in_array($e->id, old('echeanciers', [])))>
                                                 </td>
                                                 <td>
-                                                    <strong>{{ $ech->titre }}</strong>
+                                                    <strong>{{ $e->titre }}</strong>
+                                                    <div class="small text-muted">{{ $e->type_libelle }}@if ($e->montant_remise > 0) · remise {{ $dh($e->montant_remise) }}@endif</div>
                                                 </td>
-                                                <td>
-                                                    <span class="badge bg-light text-dark">
-                                                        <i class="fas fa-calendar me-1"></i>
-                                                        {{ $ech->date_echeance->format('d/m/Y') }}
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <strong class="text-success">
-                                                        {{ number_format($ech->montant_restant, 2) }} DH
-                                                    </strong>
-                                                </td>
-                                                <td>
-                                                    <span class="badge bg-{{ $ech->is_en_retard ? 'danger' : 'warning' }}">
-                                                        <i class="fas fa-{{ $ech->is_en_retard ? 'exclamation-triangle' : 'clock' }} me-1"></i>
-                                                        {{ $ech->statut_libelle }}
-                                                    </span>
-                                                </td>
+                                                <td>{{ $e->date_echeance->format('d/m/Y') }}</td>
+                                                <td class="text-end fw-semibold">{{ $dh($e->montant_restant) }}</td>
+                                                <td><span class="badge bg-{{ $e->statut_couleur }}">{{ $e->statut_libelle }}</span></td>
                                             </tr>
-                                            @endforeach
-                                        </tbody>
-                                    </table>
-                                </div>
-                                <div class="alert alert-warning border-0 mt-3">
-                                    <i class="fas fa-info-circle me-2"></i>
-                                    <small>Si aucun échéancier n'est sélectionné, le paiement sera affecté automatiquement aux plus anciens.</small>
-                                </div>
-                            @else
-                                <div class="alert alert-success border-0">
-                                    <i class="fas fa-check-circle me-2"></i>
-                                    Aucun échéancier impayé pour ce stagiaire
-                                </div>
-                            @endif
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="card-footer bg-white small text-muted">
+                                Cochez les échéances payées : le montant se remplit automatiquement.
+                                Sans sélection, le paiement règle les échéances <strong>de la plus ancienne à la plus récente</strong>.
+                            </div>
                         </div>
-                        @endif
                     </div>
-                </div>
 
-                {{-- Détails du paiement --}}
-                <div class="card border-0 shadow-sm">
-                    <div class="card-header bg-gradient-success text-white border-0">
-                        <h5 class="mb-0 d-flex align-items-center">
-                            <div class="icon-shape bg-white bg-opacity-25 rounded me-3">
-                                <i class="fas fa-money-bill-wave"></i>
-                            </div>
-                            Détails du Paiement
-                        </h5>
-                    </div>
-                    <div class="card-body p-4">
-                        <div class="row g-3">
-                            <!-- Montant -->
-                            <div class="col-md-6">
-                                <label class="form-label fw-semibold">
-                                    Montant (DH) <span class="text-danger">*</span>
-                                </label>
-                                <div class="input-group input-group-lg">
-                                    <span class="input-group-text bg-light">
-                                        <i class="fas fa-money-bill-wave text-success"></i>
-                                    </span>
-                                    <input type="number" 
-                                           name="montant" 
-                                           class="form-control @error('montant') is-invalid @enderror" 
-                                           step="0.01" 
-                                           min="1" 
-                                           value="{{ old('montant') }}"
-                                           placeholder="0.00"
-                                           required>
-                                    <span class="input-group-text bg-light">DH</span>
-                                    @error('montant')
-                                        <div class="invalid-feedback">{{ $message }}</div>
-                                    @enderror
+                    {{-- 3. Règlement --}}
+                    <div class="col-lg-5">
+                        <div class="card shadow-sm">
+                            <div class="card-header bg-white fw-semibold">3. Règlement</div>
+                            <div class="card-body row g-3">
+                                <div class="col-12">
+                                    <label class="form-label">Montant (DH) *</label>
+                                    <input type="number" name="montant" id="montant" step="0.01" min="0.01" max="{{ $encaissable }}"
+                                           value="{{ old('montant') }}" class="form-control form-control-lg @error('montant') is-invalid @enderror" required>
+                                    <small class="text-muted">Maximum : {{ $dh($encaissable) }}</small>
                                 </div>
-                            </div>
 
-                            <!-- Date du paiement -->
-                            <div class="col-md-6">
-                                <label class="form-label fw-semibold">
-                                    Date du paiement <span class="text-danger">*</span>
-                                </label>
-                                <div class="input-group input-group-lg">
-                                    <span class="input-group-text bg-light">
-                                        <i class="fas fa-calendar text-primary"></i>
-                                    </span>
-                                    <input type="date" 
-                                           name="date_paiement" 
-                                           class="form-control @error('date_paiement') is-invalid @enderror" 
-                                           value="{{ old('date_paiement', now()->format('Y-m-d')) }}" 
-                                           required>
-                                    @error('date_paiement')
-                                        <div class="invalid-feedback">{{ $message }}</div>
-                                    @enderror
-                                </div>
-                            </div>
-
-                            <!-- Type de paiement -->
-                            <div class="col-md-6">
-                                <label class="form-label fw-semibold">
-                                    Type de paiement <span class="text-danger">*</span>
-                                </label>
-                                <div class="input-group input-group-lg">
-                                    <span class="input-group-text bg-light">
-                                        <i class="fas fa-tag text-info"></i>
-                                    </span>
-                                    <select name="type_paiement" 
-                                            class="form-select @error('type_paiement') is-invalid @enderror" 
-                                            required>
-                                        <option value="">-- Choisir --</option>
-                                        <option value="inscription" {{ old('type_paiement') == 'inscription' ? 'selected' : '' }}>
-                                            Frais d'inscription
-                                        </option>
-                                        <option value="mensualite" {{ old('type_paiement') == 'mensualite' ? 'selected' : '' }}>
-                                            Mensualité
-                                        </option>
-                                        <option value="examen" {{ old('type_paiement') == 'examen' ? 'selected' : '' }}>
-                                            Frais d'examen
-                                        </option>
-                                        <option value="autre" {{ old('type_paiement') == 'autre' ? 'selected' : '' }}>
-                                            Autre
-                                        </option>
+                                <div class="col-md-6">
+                                    <label class="form-label">Mode de règlement *</label>
+                                    <select name="methode_paiement" id="methode_paiement" class="form-select @error('methode_paiement') is-invalid @enderror" required>
+                                        @foreach (\App\Models\Paiement::METHODES as $cle => $libelle)
+                                            <option value="{{ $cle }}" @selected(old('methode_paiement', 'especes') === $cle)>{{ $libelle }}</option>
+                                        @endforeach
                                     </select>
-                                    @error('type_paiement')
-                                        <div class="invalid-feedback">{{ $message }}</div>
-                                    @enderror
                                 </div>
-                            </div>
-
-                            <!-- Méthode de paiement -->
-                            <div class="col-md-6">
-                                <label class="form-label fw-semibold">
-                                    Méthode de paiement <span class="text-danger">*</span>
-                                </label>
-                                <div class="input-group input-group-lg">
-                                    <span class="input-group-text bg-light">
-                                        <i class="fas fa-credit-card text-warning"></i>
-                                    </span>
-                                    <select name="methode_paiement" 
-                                            class="form-select @error('methode_paiement') is-invalid @enderror" 
-                                            required>
-                                        <option value="">-- Choisir --</option>
-                                        <option value="especes" {{ old('methode_paiement') == 'especes' ? 'selected' : '' }}>
-                                            💵 Espèces
-                                        </option>
-                                        <option value="virement" {{ old('methode_paiement') == 'virement' ? 'selected' : '' }}>
-                                            🏦 Virement bancaire
-                                        </option>
-                                        <option value="cheque" {{ old('methode_paiement') == 'cheque' ? 'selected' : '' }}>
-                                            📝 Chèque
-                                        </option>
-                                        <option value="carte" {{ old('methode_paiement') == 'carte' ? 'selected' : '' }}>
-                                            💳 Carte bancaire
-                                        </option>
-                                        <option value="mobile_money" {{ old('methode_paiement') == 'mobile_money' ? 'selected' : '' }}>
-                                            📱 Mobile Money
-                                        </option>
-                                    </select>
-                                    @error('methode_paiement')
-                                        <div class="invalid-feedback">{{ $message }}</div>
-                                    @enderror
+                                <div class="col-md-6">
+                                    <label class="form-label">Date du paiement *</label>
+                                    <input type="date" name="date_paiement" value="{{ old('date_paiement', now()->toDateString()) }}"
+                                           max="{{ now()->toDateString() }}" class="form-control @error('date_paiement') is-invalid @enderror" required>
                                 </div>
-                            </div>
 
-                            <!-- Description -->
-                            <div class="col-12">
-                                <label class="form-label fw-semibold">Description</label>
-                                <textarea name="description" 
-                                          class="form-control @error('description') is-invalid @enderror" 
-                                          rows="3" 
-                                          placeholder="Ex: Paiement mensualité Janvier 2024">{{ old('description') }}</textarea>
-                                @error('description')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
+                                <div class="col-md-6" id="bloc-reference">
+                                    <label class="form-label" id="label-reference">Référence</label>
+                                    <input type="text" name="reference_externe" value="{{ old('reference_externe') }}" class="form-control @error('reference_externe') is-invalid @enderror">
+                                </div>
+                                <div class="col-md-6" id="bloc-banque">
+                                    <label class="form-label">Banque émettrice</label>
+                                    <input type="text" name="banque" value="{{ old('banque') }}" class="form-control" placeholder="Ex. CIH Bank">
+                                </div>
 
-                            <!-- Justificatif -->
-                            <div class="col-12">
-                                <label class="form-label fw-semibold">
-                                    <i class="fas fa-paperclip me-1"></i>
-                                    Justificatif (optionnel)
-                                </label>
-                                <input type="file" 
-                                       name="justificatif" 
-                                       class="form-control form-control-lg @error('justificatif') is-invalid @enderror" 
-                                       accept=".pdf,.jpg,.jpeg,.png">
-                                <small class="text-muted">
-                                    <i class="fas fa-info-circle me-1"></i>
-                                    Formats acceptés : PDF, JPG, PNG (Max: 5 Mo)
-                                </small>
-                                @error('justificatif')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
+                                <div class="col-12">
+                                    <div class="alert py-2 mb-0" id="info-validation"></div>
+                                </div>
+
+                                <div class="col-12">
+                                    <label class="form-label">Justificatif <small class="text-muted">(photo du chèque, avis de virement…)</small></label>
+                                    <input type="file" name="justificatif" accept=".pdf,.jpg,.jpeg,.png" class="form-control @error('justificatif') is-invalid @enderror">
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Observation</label>
+                                    <textarea name="notes_admin" rows="2" class="form-control">{{ old('notes_admin') }}</textarea>
+                                </div>
+
+                                <div class="col-12">
+                                    <button type="submit" class="btn btn-success btn-lg w-100"><i class="fas fa-check me-2"></i>Enregistrer le paiement</button>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
-
-            {{-- Colonne latérale --}}
-            <div class="col-lg-4">
-                {{-- Notes administratives --}}
-                <div class="card border-0 shadow-sm mb-4">
-                    <div class="card-header bg-light border-0">
-                        <h6 class="mb-0 d-flex align-items-center">
-                            <i class="fas fa-sticky-note text-secondary me-2"></i>
-                            Notes Administratives
-                        </h6>
-                    </div>
-                    <div class="card-body">
-                        <textarea name="notes_admin" 
-                                  class="form-control" 
-                                  rows="4" 
-                                  placeholder="Notes internes (non visibles par le stagiaire)">{{ old('notes_admin') }}</textarea>
-                        <small class="text-muted d-block mt-2">
-                            <i class="fas fa-lock me-1"></i>
-                            Ces notes sont privées et à usage interne uniquement
-                        </small>
-                    </div>
-                </div>
-
-                {{-- Informations importantes --}}
-                <div class="card border-0 border-start border-primary border-4 bg-light mb-4">
-                    <div class="card-body">
-                        <h6 class="text-primary mb-3">
-                            <i class="fas fa-info-circle me-2"></i>
-                            Informations Importantes
-                        </h6>
-                        <ul class="list-unstyled mb-0 small">
-                            <li class="mb-2 d-flex">
-                                <i class="fas fa-check text-success me-2 mt-1"></i>
-                                <span>Les paiements en <strong>espèces</strong> sont validés automatiquement</span>
-                            </li>
-                            <li class="mb-2 d-flex">
-                                <i class="fas fa-clock text-warning me-2 mt-1"></i>
-                                <span>Les autres méthodes nécessitent une validation manuelle</span>
-                            </li>
-                            <li class="mb-2 d-flex">
-                                <i class="fas fa-file-pdf text-danger me-2 mt-1"></i>
-                                <span>Un reçu sera généré automatiquement après validation</span>
-                            </li>
-                            <li class="d-flex">
-                                <i class="fas fa-bell text-info me-2 mt-1"></i>
-                                <span>Le stagiaire recevra une notification par email</span>
-                            </li>
-                        </ul>
-                    </div>
-                </div>
-
-                {{-- Boutons d'action --}}
-                <div class="card border-0 shadow-sm">
-                    <div class="card-body">
-                        <button type="submit" class="btn btn-primary btn-lg w-100 mb-3">
-                            <i class="fas fa-save me-2"></i>
-                            Enregistrer le paiement
-                        </button>
-                        <a href="{{ route('paiements.index') }}" class="btn btn-outline-secondary btn-lg w-100">
-                            <i class="fas fa-times me-2"></i>
-                            Annuler
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </form>
+            </form>
+        @endif
+    @endif
 </div>
-
-@push('styles')
-<style>
-    .icon-shape {
-        width: 40px;
-        height: 40px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-    }
-    
-    .bg-gradient-primary {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    }
-    
-    .bg-gradient-success {
-        background: linear-gradient(135deg, #0ba360 0%, #3cba92 100%);
-    }
-    
-    .form-select-lg,
-    .form-control-lg {
-        font-size: 1rem;
-        padding: 0.75rem 1rem;
-    }
-    
-    .input-group-text {
-        border: 1px solid #dee2e6;
-    }
-    
-    .table-hover tbody tr:hover {
-        background-color: #f8f9fa;
-        cursor: pointer;
-    }
-    
-    .border-4 {
-        border-width: 4px !important;
-    }
-</style>
-@endpush
+@endsection
 
 @push('scripts')
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const stagiaireSelect = document.getElementById('stagiaireSelect');
-    const stagiaireInfo = document.getElementById('stagiaireInfo');
-    const selectAllCheckbox = document.getElementById('selectAll');
-    const echeancierCheckboxes = document.querySelectorAll('.echeancier-checkbox');
-    
-    // Afficher les informations du stagiaire sélectionné
-    stagiaireSelect.addEventListener('change', function() {
-        const option = this.options[this.selectedIndex];
-        
-        if (this.value) {
-            document.getElementById('infoFiliere').textContent = option.dataset.filiere;
-            document.getElementById('infoMatricule').textContent = option.dataset.matricule;
-            document.getElementById('infoSolde').textContent = parseFloat(option.dataset.solde).toFixed(2) + ' DH';
-            stagiaireInfo.classList.remove('d-none');
+document.addEventListener('DOMContentLoaded', function () {
+    const form = document.getElementById('form-paiement');
+    if (!form) return;
+
+    const montant = document.getElementById('montant');
+    const cases = form.querySelectorAll('.case-echeance');
+    const toutCocher = document.getElementById('tout-cocher');
+    const methode = document.getElementById('methode_paiement');
+    const blocRef = document.getElementById('bloc-reference');
+    const blocBanque = document.getElementById('bloc-banque');
+    const labelRef = document.getElementById('label-reference');
+    const info = document.getElementById('info-validation');
+    const max = parseFloat(montant.max);
+
+    // Montant = total des échéances cochées (plafonné à l'encaissable)
+    function majMontant() {
+        const total = Array.from(cases).filter(c => c.checked).reduce((s, c) => s + parseFloat(c.dataset.reste), 0);
+        if (total > 0) montant.value = Math.min(total, max).toFixed(2);
+        toutCocher.checked = cases.length > 0 && Array.from(cases).every(c => c.checked);
+    }
+    cases.forEach(c => c.addEventListener('change', majMontant));
+    toutCocher.addEventListener('change', () => { cases.forEach(c => c.checked = toutCocher.checked); majMontant(); });
+
+    // Champs selon le mode de règlement
+    const libelles = { cheque: 'N° de chèque *', virement: 'Référence du virement *', carte: 'N° d\'autorisation', mobile_money: 'Référence de la transaction' };
+    function majMethode() {
+        const m = methode.value;
+        blocRef.style.display = libelles[m] ? '' : 'none';
+        blocBanque.style.display = (m === 'cheque' || m === 'virement') ? '' : 'none';
+        if (libelles[m]) labelRef.textContent = libelles[m];
+        if (m === 'especes') {
+            info.className = 'alert alert-success py-2 mb-0';
+            info.innerHTML = '<i class="fas fa-bolt me-1"></i>Espèces : le paiement est <strong>validé immédiatement</strong> et le reçu est disponible.';
         } else {
-            stagiaireInfo.classList.add('d-none');
+            info.className = 'alert alert-warning py-2 mb-0';
+            info.innerHTML = '<i class="fas fa-hourglass-half me-1"></i>Le paiement restera <strong>en attente</strong> et ne réglera les échéances qu\'après validation (encaissement confirmé).';
         }
-    });
-    
-    // Sélectionner/Désélectionner tous les échéanciers
-    if (selectAllCheckbox) {
-        selectAllCheckbox.addEventListener('change', function() {
-            echeancierCheckboxes.forEach(checkbox => {
-                checkbox.checked = this.checked;
-            });
-        });
-        
-        // Mettre à jour le checkbox "Tout sélectionner"
-        echeancierCheckboxes.forEach(checkbox => {
-            checkbox.addEventListener('change', function() {
-                const allChecked = Array.from(echeancierCheckboxes).every(cb => cb.checked);
-                const someChecked = Array.from(echeancierCheckboxes).some(cb => cb.checked);
-                selectAllCheckbox.checked = allChecked;
-                selectAllCheckbox.indeterminate = someChecked && !allChecked;
-            });
-        });
     }
-    
-    // Trigger au chargement si un stagiaire est pré-sélectionné
-    if (stagiaireSelect.value) {
-        stagiaireSelect.dispatchEvent(new Event('change'));
-    }
-    
-    // Validation du formulaire
-    const form = document.querySelector('form');
-    form.addEventListener('submit', function(e) {
-        const montant = parseFloat(document.querySelector('input[name="montant"]').value);
-        const soldeText = document.getElementById('infoSolde').textContent;
-        const soldeRestant = parseFloat(soldeText.replace(' DH', ''));
-        
-        if (montant > soldeRestant && !isNaN(soldeRestant)) {
+    methode.addEventListener('change', majMethode);
+    majMethode();
+
+    form.addEventListener('submit', function (e) {
+        if (parseFloat(montant.value) > max) {
             e.preventDefault();
-            alert('⚠️ Le montant saisi (' + montant.toFixed(2) + ' DH) dépasse le solde restant (' + soldeRestant.toFixed(2) + ' DH)');
-            return false;
+            alert('Le montant dépasse le maximum encaissable (' + max.toFixed(2) + ' DH).');
         }
     });
 });
 </script>
 @endpush
-@endsection

@@ -2,33 +2,28 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Echeancier;
 use App\Models\Paiement;
 use App\Models\Stagiaire;
-use App\Models\Echeancier;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
+use App\Services\PaiementService;
 use Barryvdh\DomPDF\Facade\Pdf;
-
-// Notifications
-use App\Notifications\PaiementRecuNotification;
-use App\Notifications\PaiementValideNotification;
-use App\Notifications\PaiementRefuseNotification;
+use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class PaiementController extends Controller
 {
-    public function __construct()
+    public function __construct(private PaiementService $service)
     {
         $this->middleware('auth');
-        // ✅ MODIFIÉ - Accès admin ET comptable
+
+        // Admin et comptable — sauf l'espace stagiaire (ses paiements, ses reçus)
         $this->middleware(function ($request, $next) {
             if (!auth()->user()->hasFinancialAccess()) {
                 abort(403, 'Accès réservé aux comptables et administrateurs');
             }
             return $next($request);
-        });
+        })->except(['mesPaiements', 'telechargerRecu']);
     }
 
     /**
@@ -36,326 +31,205 @@ class PaiementController extends Controller
      */
     public function index(Request $request)
     {
-        $q = Paiement::with(['stagiaire.filiere', 'echeanciers'])
-            ->when($request->filled('search'), function ($qq) use ($request) {
+        $paiements = Paiement::with(['stagiaire.filiere', 'echeanciers'])
+            ->when($request->filled('search'), function ($q) use ($request) {
                 $s = $request->string('search');
-                $qq->where('numero_transaction', 'like', "%{$s}%")
-                   ->orWhereHas('stagiaire', fn ($sq) =>
-                        $sq->where('nom', 'like', "%{$s}%")
-                           ->orWhere('prenom', 'like', "%{$s}%")
-                           ->orWhere('matricule', 'like', "%{$s}%")
-                    );
+                // Groupé : sinon le OR annulerait les autres filtres
+                $q->where(function ($qq) use ($s) {
+                    $qq->where('numero_transaction', 'like', "%{$s}%")
+                       ->orWhere('reference_externe', 'like', "%{$s}%")
+                       ->orWhereHas('stagiaire', fn ($sq) => $sq->where('nom', 'like', "%{$s}%")
+                            ->orWhere('prenom', 'like', "%{$s}%")
+                            ->orWhere('matricule', 'like', "%{$s}%"));
+                });
             })
-            ->when($request->filled('statut'), fn ($qq) => $qq->where('statut', $request->statut))
-            ->when($request->filled('type_paiement'), fn ($qq) => $qq->where('type_paiement', $request->type_paiement))
-            ->when($request->filled('methode_paiement'), fn ($qq) => $qq->where('methode_paiement', $request->methode_paiement))
-            ->when($request->filled('date_debut'), fn ($qq) => $qq->whereDate('date_paiement', '>=', $request->date_debut))
-            ->when($request->filled('date_fin'), fn ($qq) => $qq->whereDate('date_paiement', '<=', $request->date_fin))
-            ->latest('date_paiement');
-
-        $paiements = $q->paginate(20);
+            ->when($request->filled('statut'), fn ($q) => $q->where('statut', $request->statut))
+            ->when($request->filled('type_paiement'), fn ($q) => $q->where('type_paiement', $request->type_paiement))
+            ->when($request->filled('methode_paiement'), fn ($q) => $q->where('methode_paiement', $request->methode_paiement))
+            ->when($request->filled('date_debut'), fn ($q) => $q->whereDate('date_paiement', '>=', $request->date_debut))
+            ->when($request->filled('date_fin'), fn ($q) => $q->whereDate('date_paiement', '<=', $request->date_fin))
+            ->latest('date_paiement')->latest('id')
+            ->paginate(20)
+            ->withQueryString();
 
         $stats = [
-            'total_paiements' => Paiement::where('statut', 'valide')->sum('montant'),
-            'en_attente'      => Paiement::where('statut', 'en_attente')->count(),
-            'refuses'         => Paiement::where('statut', 'refuse')->count(),
+            'total_paiements' => Paiement::valides()->sum('montant'),
+            'en_attente'      => Paiement::enAttente()->count(),
+            'refuses'         => Paiement::refuses()->count(),
         ];
 
-        return view('paiements.index', [
-            'paiements' => $paiements,
-            'stats' => $stats,
-        ]);
+        return view('paiements.index', compact('paiements', 'stats'));
     }
 
     /**
-     * Formulaire de création
+     * Formulaire d'encaissement
      */
     public function create(Request $request)
     {
-        $stagiaire = $request->filled('stagiaire_id')
-            ? Stagiaire::with('echeanciers')->findOrFail($request->stagiaire_id)
-            : null;
+        $stagiaire = null;
+        $echeances = collect();
+        $encaissable = 0;
+        $enAttente = collect();
 
-        $stagiaires = Stagiaire::actifs()->with('filiere')->orderBy('nom')->get();
+        if ($request->filled('stagiaire_id')) {
+            $stagiaire = Stagiaire::with(['filiere', 'classe'])->findOrFail($request->stagiaire_id);
+            $echeances = Echeancier::where('stagiaire_id', $stagiaire->id)->ouverts()
+                ->orderBy('date_echeance')->get();
+            $encaissable = $this->service->montantEncaissable($stagiaire->id);
+            $enAttente = $stagiaire->paiements()->enAttente()->latest()->get();
+        }
 
-        return view('paiements.create', compact('stagiaire', 'stagiaires'));
+        $stagiaires = Stagiaire::actifs()->orderBy('nom')->orderBy('prenom')->get(['id', 'nom', 'prenom', 'matricule']);
+
+        return view('paiements.create', compact('stagiaire', 'stagiaires', 'echeances', 'encaissable', 'enAttente'));
     }
 
     /**
-     * Enregistrer un paiement (statut = en_attente)
-     * + affectation FIFO sur les échéances impayées
+     * Enregistrer un paiement
      */
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'stagiaire_id'     => ['required', 'exists:stagiaires,id'],
-            'montant'          => ['required', 'numeric', 'min:0.01'],
-            'type_paiement'    => ['required', 'string', 'in:inscription,mensualite,examen,autre'],
-            'methode_paiement' => ['required', 'string', 'in:especes,virement,cheque,carte,mobile_money'],
-            'date_paiement'    => ['required', 'date'],
-            'description'      => ['nullable', 'string', 'max:1000'],
-            'notes_admin'      => ['nullable', 'string', 'max:1000'],
-            'justificatif'     => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
-            'echeanciers'      => ['nullable', 'array'],
-            'echeanciers.*'    => ['exists:echeanciers,id'],
+            'stagiaire_id'      => ['required', 'exists:stagiaires,id'],
+            'montant'           => ['required', 'numeric', 'min:0.01'],
+            'methode_paiement'  => ['required', Rule::in(array_keys(Paiement::METHODES))],
+            'type_paiement'     => ['nullable', Rule::in(array_keys(Paiement::TYPES))],
+            'date_paiement'     => ['required', 'date', 'before_or_equal:today'],
+            'reference_externe' => ['nullable', 'required_if:methode_paiement,cheque,virement', 'string', 'max:100'],
+            'banque'            => ['nullable', 'string', 'max:100'],
+            'description'       => ['nullable', 'string', 'max:1000'],
+            'notes_admin'       => ['nullable', 'string', 'max:1000'],
+            'justificatif'      => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
+            'echeanciers'       => ['nullable', 'array'],
+            'echeanciers.*'     => ['integer', 'exists:echeanciers,id'],
+        ], [
+            'reference_externe.required_if' => 'Indiquez le n° de chèque ou la référence du virement.',
+            'date_paiement.before_or_equal' => 'La date de paiement ne peut pas être dans le futur.',
         ]);
 
-        // Refus de sur-paiement
-        $totalRestant = $this->getTotalRestantStagiaire($validated['stagiaire_id']);
-        if ((float)$validated['montant'] > (float)$totalRestant) {
-            return back()
-                ->withErrors(['montant' => "Le montant dépasse le total restant du stagiaire (" . number_format($totalRestant, 2) . " DH)."])
-                ->withInput();
-        }
+        $paiement = $this->service->enregistrer($validated, $request->file('justificatif'));
 
-        $paiement = null;
+        $message = $paiement->statut === 'valide'
+            ? 'Paiement encaissé et validé. Le reçu est disponible.'
+            : 'Paiement enregistré en attente : validez-le quand le ' . mb_strtolower($paiement->methode_libelle) . ' est encaissé.';
 
-        DB::transaction(function () use ($request, $validated, &$paiement) {
-            // Création du paiement
-            $paiement = Paiement::create([
-                'stagiaire_id'      => $validated['stagiaire_id'],
-                'user_id'           => auth()->id(),
-                'montant'           => $validated['montant'],
-                'type_paiement'     => $validated['type_paiement'],
-                'methode_paiement'  => $validated['methode_paiement'],
-                'statut'            => $validated['methode_paiement'] === 'especes' ? 'valide' : 'en_attente',
-                'date_paiement'     => $validated['date_paiement'],
-                'description'       => $validated['description'] ?? null,
-                'notes_admin'       => $validated['notes_admin'] ?? null,
-                'valide_at'         => $validated['methode_paiement'] === 'especes' ? now() : null,
-                'valide_by'         => $validated['methode_paiement'] === 'especes' ? auth()->id() : null,
-            ]);
-
-            // Stockage du justificatif (public pour téléchargement)
-            if ($request->hasFile('justificatif')) {
-                $path = $request->file('justificatif')
-                    ->store('justificatifs/' . $paiement->stagiaire_id, 'public');
-                $paiement->update(['justificatif_path' => $path]);
-            }
-
-            // Affectation FIFO ou manuelle
-            if (!empty($validated['echeanciers'])) {
-                $this->affecterPaiementManuel($paiement, $validated['echeanciers']);
-            } else {
-                $this->affecterPaiementFIFO($paiement);
-            }
-
-            // Si paiement en espèces, validation automatique
-            if ($paiement->statut === 'valide') {
-                $paiement->genererRecu();
-                optional($paiement->stagiaire)->updateSoldePaiement();
-                $this->notifyStagiaire($paiement, new PaiementValideNotification($paiement));
-            } else {
-                // Notification "reçu" (en attente de validation)
-                $this->notifyStagiaire($paiement, new PaiementRecuNotification($paiement));
-            }
-        });
-
-        return redirect()->route('paiements.show', $paiement)
-            ->with('success', 'Paiement enregistré avec succès.');
+        return redirect()->route('paiements.show', $paiement)->with('success', $message);
     }
 
-    /**
-     * Détail d'un paiement
-     */
     public function show(Paiement $paiement)
     {
-        $paiement->load(['stagiaire.filiere', 'echeanciers' => fn($q) => $q->orderBy('date_echeance')]);
-        return view('paiements.show', compact('paiement'));
+        $paiement->load(['stagiaire.filiere', 'stagiaire.classe', 'user', 'validateur',
+            'echeanciers' => fn ($q) => $q->orderBy('date_echeance')]);
+
+        $echeancesCibles = $paiement->echeances_cibles
+            ? Echeancier::whereIn('id', $paiement->echeances_cibles)->orderBy('date_echeance')->get()
+            : collect();
+
+        return view('paiements.show', compact('paiement', 'echeancesCibles'));
     }
 
-    /**
-     * Valider un paiement
-     */
     public function valider(Request $request, Paiement $paiement)
     {
-        if ($paiement->statut === 'valide') {
-            return back()->with('info', 'Ce paiement est déjà validé.');
+        $request->validate(['notes_admin' => 'nullable|string|max:1000']);
+
+        try {
+            $this->service->valider($paiement, $request->input('notes_admin'));
+        } catch (ValidationException $e) {
+            return back()->with('error', $e->validator->errors()->first());
         }
 
-        DB::transaction(function () use ($request, $paiement) {
-            $paiement->update([
-                'statut'     => 'valide',
-                'valide_at'  => now(),
-                'valide_by'  => auth()->id(),
-                'notes_admin' => $request->input('notes_admin', $paiement->notes_admin),
-            ]);
-
-            // Générer le reçu
-            $paiement->genererRecu();
-
-            // Recalcule les agrégats du stagiaire
-            optional($paiement->stagiaire)->updateSoldePaiement();
-
-            // Notification de validation
-            $this->notifyStagiaire($paiement, new PaiementValideNotification($paiement));
-        });
-
-        return back()->with('success', 'Paiement validé avec succès.');
+        return back()->with('success', 'Paiement validé et imputé sur les échéances.');
     }
 
-    /**
-     * Refuser un paiement
-     */
     public function refuser(Request $request, Paiement $paiement)
     {
-        $data = $request->validate([
-            'motif_refus' => ['required', 'string', 'max:1000'],
-        ]);
+        $data = $request->validate(['motif_refus' => 'required|string|max:1000']);
 
-        if ($paiement->statut === 'refuse') {
-            return back()->with('info', 'Ce paiement est déjà refusé.');
+        try {
+            $this->service->refuser($paiement, $data['motif_refus']);
+        } catch (ValidationException $e) {
+            return back()->with('error', $e->validator->errors()->first());
         }
-
-        DB::transaction(function () use ($paiement, $data) {
-            $paiement->update([
-                'statut'      => 'refuse',
-                'notes_admin' => $data['motif_refus'],
-            ]);
-
-            $this->notifyStagiaire($paiement, new PaiementRefuseNotification($paiement, $data['motif_refus']));
-        });
 
         return back()->with('success', 'Paiement refusé.');
     }
 
     /**
-     * Reçu PDF
+     * Annuler un paiement validé (administrateur uniquement)
      */
-    public function telechargerRecu(Paiement $paiement)
+    public function annuler(Request $request, Paiement $paiement)
     {
-        if ($paiement->statut !== 'valide') {
-            return back()->with('error', 'Le reçu n\'est disponible que pour les paiements validés.');
+        abort_unless(auth()->user()->isAdmin(), 403, 'Seul un administrateur peut annuler un paiement validé.');
+
+        $data = $request->validate(['motif_annulation' => 'required|string|max:1000']);
+
+        try {
+            $this->service->annuler($paiement, $data['motif_annulation']);
+        } catch (ValidationException $e) {
+            return back()->with('error', $e->validator->errors()->first());
         }
 
-        $paiement->load(['stagiaire.filiere', 'stagiaire.classe', 'echeanciers' => fn($q) => $q->orderBy('date_echeance')]);
-
-        $pdf = Pdf::loadView('paiements.recu', [
-            'paiement' => $paiement,
-        ])->setPaper('a4');
-
-        return $pdf->stream('recu_' . $paiement->numero_transaction . '.pdf');
+        return back()->with('success', 'Paiement annulé : les échéances concernées sont de nouveau dues.');
     }
 
     /**
-     * Vue stagiaire : Mes paiements
+     * Reçu PDF (admin, comptable, ou le stagiaire concerné)
+     */
+    public function telechargerRecu(Paiement $paiement)
+    {
+        $user = auth()->user();
+        if (!$user->hasFinancialAccess()) {
+            $stagiaire = $user->stagiaire;
+            abort_if(!$stagiaire || (int) $paiement->stagiaire_id !== (int) $stagiaire->id, 403);
+        }
+
+        if ($paiement->statut !== 'valide') {
+            return back()->with('error', 'Le reçu n\'est disponible que pour un paiement validé.');
+        }
+
+        $paiement->load(['stagiaire.filiere', 'stagiaire.classe', 'validateur', 'user',
+            'echeanciers' => fn ($q) => $q->orderBy('date_echeance')]);
+
+        return Pdf::loadView('paiements.recu', ['paiement' => $paiement])
+            ->setPaper('a4')
+            ->stream('recu_' . $paiement->numero_transaction . '.pdf')
+            ->header('Cache-Control', 'no-store, no-cache, must-revalidate')
+            ->header('Pragma', 'no-cache');
+    }
+
+    /**
+     * Espace stagiaire : mes paiements
      */
     public function mesPaiements()
     {
         $stagiaire = auth()->user()->stagiaire;
-        
-        if (!$stagiaire) {
-            abort(403, 'Aucun profil stagiaire associé');
-        }
-        
-        $paiements = $stagiaire->paiements()
-            ->with('echeanciers')
-            ->latest('date_paiement')
-            ->paginate(15);
-        
+        abort_unless($stagiaire, 403, 'Aucun profil stagiaire associé');
+
+        $stagiaire->updateSoldePaiement();
+
+        $paiements = $stagiaire->paiements()->with('echeanciers')
+            ->latest('date_paiement')->latest('id')->paginate(15);
+
         $stats = [
-            'total_paye' => $stagiaire->total_paye,
-            'solde_restant' => $stagiaire->solde_restant,
-            'en_attente' => $stagiaire->paiements()->where('statut', 'en_attente')->count(),
+            'total_a_payer' => (float) $stagiaire->total_a_payer,
+            'total_paye'    => (float) $stagiaire->total_paye,
+            'solde_restant' => (float) $stagiaire->solde_restant,
+            'en_attente'    => $stagiaire->paiements()->enAttente()->sum('montant'),
         ];
-        
-        return view('stagiaire.paiements', compact('paiements', 'stats'));
+
+        return view('stagiaires.paiements', compact('stagiaire', 'paiements', 'stats'));
     }
 
     /**
-     * Historique des paiements d'un stagiaire (admin/comptable)
+     * Historique complet d'un stagiaire
      */
     public function historique(Stagiaire $stagiaire)
     {
-        $paiements = $stagiaire->paiements()
-            ->with('echeanciers')
-            ->latest('date_paiement')
-            ->paginate(20);
+        $stagiaire->updateSoldePaiement();
+
+        $paiements = $stagiaire->paiements()->with('echeanciers')
+            ->latest('date_paiement')->latest('id')->paginate(20);
 
         return view('paiements.historique', compact('stagiaire', 'paiements'));
-    }
-
-    // =========================================================================
-    // MÉTHODES PRIVÉES
-    // =========================================================================
-
-    /**
-     * Montant restant global du stagiaire
-     */
-    private function getTotalRestantStagiaire(int $stagiaireId): float
-    {
-        return (float) Echeancier::where('stagiaire_id', $stagiaireId)
-            ->whereIn('statut', ['impaye', 'paye_partiel', 'en_retard'])
-            ->sum('montant_restant');
-    }
-
-    /**
-     * Affectation FIFO automatique
-     */
-    private function affecterPaiementFIFO(Paiement $paiement): void
-    {
-        $reste = (float) $paiement->montant;
-
-        $echeanciers = Echeancier::where('stagiaire_id', $paiement->stagiaire_id)
-            ->whereIn('statut', ['impaye', 'paye_partiel', 'en_retard'])
-            ->where('montant_restant', '>', 0)
-            ->orderBy('date_echeance', 'asc')
-            ->lockForUpdate()
-            ->get();
-
-        foreach ($echeanciers as $ech) {
-            if ($reste <= 0) break;
-
-            $aAffecter = min($reste, $ech->montant_restant);
-            if ($aAffecter <= 0) continue;
-
-            $ech->affecterPaiement($paiement, $aAffecter);
-            $reste -= $aAffecter;
-        }
-    }
-
-    /**
-     * Affectation manuelle sur échéanciers sélectionnés
-     */
-    private function affecterPaiementManuel(Paiement $paiement, array $echeancierIds): void
-    {
-        $reste = (float) $paiement->montant;
-
-        $echeanciers = Echeancier::whereIn('id', $echeancierIds)
-            ->where('stagiaire_id', $paiement->stagiaire_id)
-            ->whereIn('statut', ['impaye', 'paye_partiel', 'en_retard'])
-            ->where('montant_restant', '>', 0)
-            ->orderBy('date_echeance', 'asc')
-            ->lockForUpdate()
-            ->get();
-
-        foreach ($echeanciers as $ech) {
-            if ($reste <= 0) break;
-
-            $aAffecter = min($reste, $ech->montant_restant);
-            if ($aAffecter <= 0) continue;
-
-            $ech->affecterPaiement($paiement, $aAffecter);
-            $reste -= $aAffecter;
-        }
-    }
-
-    /**
-     * Notifier le stagiaire
-     */
-    private function notifyStagiaire(Paiement $paiement, $notification): void
-    {
-        try {
-            $stagiaire = $paiement->stagiaire;
-            if ($stagiaire && $stagiaire->user) {
-                $stagiaire->user->notify($notification);
-            }
-        } catch (\Exception $e) {
-            // Logger l'erreur sans bloquer le paiement
-            \Log::warning('Impossible d\'envoyer la notification email', [
-                'paiement_id' => $paiement->id,
-                'error' => $e->getMessage()
-            ]);
-        }
     }
 }

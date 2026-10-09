@@ -2,51 +2,43 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AnneeScolaire;
 use App\Models\Echeancier;
 use App\Models\Stagiaire;
-use App\Models\AnneeScolaire;
+use App\Services\RemiseService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Carbon\Carbon; // ✅ Import Carbon
+use Illuminate\Validation\Rule;
 
 class EcheancierController extends Controller
 {
-    public function __construct()
+    private const MOIS = [1 => 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+
+    public function __construct(private RemiseService $remises)
     {
         $this->middleware('auth');
 
-        // ✅ Accès admin ET comptable uniquement
         $this->middleware(function ($request, $next) {
             if (!auth()->user()->hasFinancialAccess()) {
                 abort(403, 'Accès réservé aux comptables et administrateurs');
             }
             return $next($request);
-        });
+        })->except(['mesEcheanciers']);
     }
 
-    /**
-     * Liste des échéanciers
-     */
     public function index(Request $request)
     {
-        $query = Echeancier::with(['stagiaire.filiere', 'anneeScolaire']);
+        $query = Echeancier::with(['stagiaire.filiere', 'anneeScolaire'])
+            ->when($request->filled('stagiaire_id'), fn ($q) => $q->where('stagiaire_id', $request->stagiaire_id))
+            ->when($request->filled('statut'), fn ($q) => $q->where('statut', $request->statut))
+            ->when($request->filled('type'), fn ($q) => $q->where('type', $request->type))
+            ->when($request->boolean('en_retard'), fn ($q) => $q->enRetard());
 
-        if ($request->filled('stagiaire_id')) {
-            $query->where('stagiaire_id', $request->stagiaire_id);
-        }
-
-        if ($request->filled('statut')) {
-            $query->where('statut', $request->statut);
-        }
-
-        if ($request->filled('en_retard') && $request->boolean('en_retard')) {
-            $query->enRetard();
-        }
-
-        $echeanciers = $query->orderBy('date_echeance', 'desc')->paginate(20);
+        $echeanciers = $query->orderBy('date_echeance', 'desc')->paginate(20)->withQueryString();
 
         $stats = [
-            'total_impayes' => Echeancier::impayes()->sum('montant_restant'),
+            'total_impayes' => Echeancier::ouverts()->sum('montant_restant'),
             'en_retard'     => Echeancier::enRetard()->count(),
             'a_venir'       => Echeancier::aVenir()->count(),
         ];
@@ -54,53 +46,56 @@ class EcheancierController extends Controller
         return view('echeanciers.index', compact('echeanciers', 'stats'));
     }
 
-    /**
-     * Formulaire de création d'un échéancier
-     */
     public function create(Request $request)
     {
-        $stagiaireId = $request->input('stagiaire_id');
-        $stagiaire   = $stagiaireId ? Stagiaire::findOrFail($stagiaireId) : null;
-
+        $stagiaire = $request->filled('stagiaire_id') ? Stagiaire::findOrFail($request->stagiaire_id) : null;
         $stagiaires = Stagiaire::actifs()->with('filiere')->orderBy('nom')->get();
-        $annees     = AnneeScolaire::orderBy('debut', 'desc')->get();
+        $annees = AnneeScolaire::orderBy('debut', 'desc')->get();
 
         return view('echeanciers.create', compact('stagiaires', 'stagiaire', 'annees'));
     }
 
     /**
-     * Enregistrer un échéancier simple
+     * Échéance unique (frais d'inscription, examen, mensualité isolée…)
      */
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'stagiaire_id'       => 'required|exists:stagiaires,id',
-            'annee_scolaire_id'  => 'required|exists:annee_scolaires,id',
-            'titre'              => 'required|string|max:255',
-            'montant'            => 'required|numeric|min:1',
-            'date_echeance'      => 'required|date',
+            'stagiaire_id'      => 'required|exists:stagiaires,id',
+            'annee_scolaire_id' => 'required|exists:annee_scolaires,id',
+            'type'              => ['nullable', Rule::in(array_keys(Echeancier::TYPES))],
+            'titre'             => 'required|string|max:255',
+            'montant'           => 'required|numeric|min:1',
+            'date_echeance'     => 'required|date',
         ]);
 
-        $echeancier = Echeancier::create([
-            'stagiaire_id'      => $validated['stagiaire_id'],
-            'annee_scolaire_id' => $validated['annee_scolaire_id'],
-            'titre'             => $validated['titre'],
-            'montant'           => $validated['montant'],
-            'date_echeance'     => $validated['date_echeance'],
-            'montant_paye'      => 0,
-            'montant_restant'   => $validated['montant'],
-            'statut'            => 'impaye',
-        ]);
+        $stagiaire = Stagiaire::findOrFail($validated['stagiaire_id']);
 
-        // Mise à jour du solde du stagiaire
-        Stagiaire::find($validated['stagiaire_id'])?->updateSoldePaiement();
+        DB::transaction(function () use ($validated, $stagiaire) {
+            $echeance = Echeancier::create([
+                'stagiaire_id'      => $validated['stagiaire_id'],
+                'annee_scolaire_id' => $validated['annee_scolaire_id'],
+                'titre'             => $validated['titre'],
+                'montant'           => $validated['montant'],
+                'date_echeance'     => $validated['date_echeance'],
+                'type'           => $validated['type'] ?? $this->deviner($validated['titre']),
+                'montant_remise' => 0,
+                'montant_paye'   => 0,
+                'montant_restant'=> $validated['montant'],
+                'statut'         => 'impaye',
+            ]);
+            $echeance->recalculer();
 
-        return redirect()->route('echeanciers.index')
-            ->with('success', 'Échéancier créé avec succès.');
+            // Les remises du stagiaire s'appliquent aussi à la nouvelle échéance
+            $this->remises->appliquer($stagiaire);
+        });
+
+        return redirect()->route('echeanciers.index', ['stagiaire_id' => $stagiaire->id])
+            ->with('success', 'Échéance créée.');
     }
 
     /**
-     * Générer automatiquement des échéanciers mensuels
+     * Génère les mensualités (une par mois), sans doublon
      */
     public function genererMensuels(Request $request)
     {
@@ -112,170 +107,162 @@ class EcheancierController extends Controller
             'nombre_mois'       => 'required|integer|min:1|max:12',
         ]);
 
-        DB::beginTransaction();
-        try {
-            $stagiaire = Stagiaire::findOrFail($validated['stagiaire_id']);
-            $dateDebut = Carbon::parse($validated['date_debut']);
+        $stagiaire = Stagiaire::findOrFail($validated['stagiaire_id']);
+        $debut = Carbon::parse($validated['date_debut']);
+        $crees = 0;
+        $ignores = 0;
 
+        DB::transaction(function () use ($validated, $stagiaire, $debut, &$crees, &$ignores) {
             for ($i = 0; $i < $validated['nombre_mois']; $i++) {
-                $dateEcheance = $dateDebut->copy()->addMonths($i);
+                $date = $debut->copy()->addMonthsNoOverflow($i);
+                $titre = 'Mensualité ' . self::MOIS[$date->month] . ' ' . $date->year;
+
+                $existe = Echeancier::where('stagiaire_id', $stagiaire->id)
+                    ->where('annee_scolaire_id', $validated['annee_scolaire_id'])
+                    ->where('type', 'mensualite')
+                    ->whereYear('date_echeance', $date->year)
+                    ->whereMonth('date_echeance', $date->month)
+                    ->exists();
+
+                if ($existe) {
+                    $ignores++;
+                    continue;
+                }
 
                 Echeancier::create([
-                    'stagiaire_id'      => $validated['stagiaire_id'],
+                    'stagiaire_id'      => $stagiaire->id,
                     'annee_scolaire_id' => $validated['annee_scolaire_id'],
-                    'titre'             => 'Mensualité ' . $dateEcheance->format('F Y'),
+                    'titre'             => $titre,
+                    'type'              => 'mensualite',
                     'montant'           => $validated['montant_mensuel'],
-                    'date_echeance'     => $dateEcheance,
+                    'montant_remise'    => 0,
+                    'date_echeance'     => $date,
                     'montant_paye'      => 0,
                     'montant_restant'   => $validated['montant_mensuel'],
                     'statut'            => 'impaye',
-                ]);
+                ])->recalculer();
+                $crees++;
             }
 
-            $stagiaire->updateSoldePaiement();
+            $this->remises->appliquer($stagiaire);
+        });
 
-            DB::commit();
-
-            return redirect()
-                ->route('echeanciers.index', ['stagiaire_id' => $validated['stagiaire_id']])
-                ->with('success', "{$validated['nombre_mois']} échéanciers créés avec succès.");
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'Erreur : ' . $e->getMessage());
+        $message = "{$crees} mensualité(s) créée(s).";
+        if ($ignores) {
+            $message .= " {$ignores} mois existaient déjà et ont été ignorés.";
         }
+
+        return redirect()->route('echeanciers.index', ['stagiaire_id' => $stagiaire->id])->with('success', $message);
     }
 
-    /**
-     * Afficher un échéancier
-     */
     public function show(Echeancier $echeancier)
     {
         $echeancier->load(['stagiaire.filiere', 'anneeScolaire', 'paiements.user']);
-
         return view('echeanciers.show', compact('echeancier'));
     }
 
-    /**
-     * Formulaire d'édition d'un échéancier
-     */
     public function edit(Echeancier $echeancier)
     {
         $stagiaires = Stagiaire::actifs()->with('filiere')->orderBy('nom')->get();
-        $annees     = AnneeScolaire::orderBy('debut', 'desc')->get();
-
+        $annees = AnneeScolaire::orderBy('debut', 'desc')->get();
         return view('echeanciers.edit', compact('echeancier', 'stagiaires', 'annees'));
     }
 
-    /**
-     * Mettre à jour un échéancier
-     */
     public function update(Request $request, Echeancier $echeancier)
     {
         if ($echeancier->statut === 'paye') {
-            return back()->with('error', 'Impossible de modifier un échéancier déjà payé.');
+            return back()->with('error', 'Impossible de modifier une échéance déjà payée.');
         }
 
         $validated = $request->validate([
             'titre'         => 'required|string|max:255',
-            'montant'       => 'required|numeric|min:' . $echeancier->montant_paye,
+            'type'          => ['nullable', Rule::in(array_keys(Echeancier::TYPES))],
+            'montant'       => 'required|numeric|min:' . max(1, (float) $echeancier->montant_paye),
             'date_echeance' => 'required|date',
+        ], [
+            'montant.min' => 'Le montant ne peut pas être inférieur à ce qui a déjà été payé (' . number_format($echeancier->montant_paye, 2, ',', ' ') . ' DH).',
         ]);
 
-        $echeancier->update([
-            'titre'           => $validated['titre'],
-            'montant'         => $validated['montant'],
-            'date_echeance'   => $validated['date_echeance'],
-            'montant_restant' => $validated['montant'] - $echeancier->montant_paye,
-        ]);
+        DB::transaction(function () use ($echeancier, $validated) {
+            $echeancier->update([
+                'titre'         => $validated['titre'],
+                'type'          => $validated['type'] ?? $echeancier->type,
+                'montant'       => $validated['montant'],
+                'date_echeance' => $validated['date_echeance'],
+            ]);
+            $this->remises->appliquer($echeancier->stagiaire); // recalcule remise, reste et statut
+        });
 
-        $echeancier->stagiaire?->updateSoldePaiement();
-
-        return redirect()->route('echeanciers.index')
-            ->with('success', 'Échéancier mis à jour avec succès.');
+        return redirect()->route('echeanciers.index', ['stagiaire_id' => $echeancier->stagiaire_id])
+            ->with('success', 'Échéance mise à jour.');
     }
 
-    /**
-     * Supprimer un échéancier
-     */
     public function destroy(Echeancier $echeancier)
     {
-        if ($echeancier->montant_paye > 0) {
-            return back()->with('error', 'Impossible de supprimer un échéancier avec des paiements.');
+        if ((float) $echeancier->montant_paye > 0 || $echeancier->paiements()->exists()) {
+            return back()->with('error', 'Impossible de supprimer une échéance qui a reçu des paiements.');
         }
 
-        $stagiaireId = $echeancier->stagiaire_id;
+        $stagiaire = $echeancier->stagiaire;
         $echeancier->delete();
+        $stagiaire?->updateSoldePaiement();
 
-        Stagiaire::find($stagiaireId)?->updateSoldePaiement();
-
-        return redirect()->route('echeanciers.index')
-            ->with('success', 'Échéancier supprimé avec succès.');
+        return redirect()->route('echeanciers.index', ['stagiaire_id' => $stagiaire?->id])
+            ->with('success', 'Échéance supprimée.');
     }
 
     /**
-     * Vue stagiaire : Mes échéanciers
+     * Espace stagiaire : mes échéances
      */
     public function mesEcheanciers()
     {
         $stagiaire = auth()->user()->stagiaire;
+        abort_unless($stagiaire, 403, 'Aucun profil stagiaire associé');
 
-        if (!$stagiaire) {
-            abort(403, 'Aucun profil stagiaire associé');
-        }
-
-        $echeanciers = $stagiaire->echeanciers()
-            ->with('anneeScolaire')
-            ->orderBy('date_echeance', 'desc')
-            ->get();
+        $echeanciers = $stagiaire->echeanciers()->with('anneeScolaire')->orderBy('date_echeance')->get();
 
         $stats = [
-            'total_a_payer'  => $echeanciers->sum('montant'),
-            'total_paye'     => $echeanciers->sum('montant_paye'),
-            'total_restant'  => $echeanciers->sum('montant_restant'),
-            'en_retard'      => $echeanciers->where('statut', 'en_retard')->count(),
-            'payes'          => $echeanciers->where('statut', 'paye')->count(),
+            'total_du'  => $echeanciers->sum(fn ($e) => $e->montant_net),
+            'total_paye'=> $echeanciers->sum('montant_paye'),
+            'restant'   => $echeanciers->sum('montant_restant'),
+            'remises'   => $echeanciers->sum('montant_remise'),
+            'retards'   => $echeanciers->where('statut', 'en_retard')->count(),
         ];
 
-        return view('stagiaire.echeanciers', compact('echeanciers', 'stats'));
+        return view('stagiaires.echeanciers', compact('stagiaire', 'echeanciers', 'stats'));
     }
 
-    /**
-     * Imprimer/Télécharger un échéancier en PDF
-     */
     public function imprimer(Echeancier $echeancier)
     {
-        $echeancier->load([
-            'stagiaire.filiere',
-            'stagiaire.classe',
-            'anneeScolaire',
-            'paiements.user'
-        ]);
+        $echeancier->load(['stagiaire.filiere', 'stagiaire.classe', 'anneeScolaire', 'paiements.user']);
 
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('echeanciers.print', [
-            'echeancier' => $echeancier
-        ]);
-
-        return $pdf->download('echeancier_' . $echeancier->id . '.pdf');
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('echeanciers.print', ['echeancier' => $echeancier])
+            ->download('echeance_' . $echeancier->id . '.pdf');
     }
 
     /**
-     * Vérifier et mettre à jour les retards
+     * Recalcule les statuts (retards) de toutes les échéances ouvertes
      */
     public function verifierRetards()
     {
-        $echeanciers = Echeancier::whereIn('statut', ['impaye', 'paye_partiel'])
-            ->where('date_echeance', '<', now())
-            ->get();
+        $avant = Echeancier::where('statut', 'en_retard')->count();
 
-        $count = 0;
-        foreach ($echeanciers as $echeancier) {
-            if ($echeancier->statut !== 'en_retard') {
-                $echeancier->update(['statut' => 'en_retard']);
-                $count++;
-            }
-        }
+        Echeancier::where('montant_restant', '>', 0)->each(fn ($e) => $e->recalculer());
+        Stagiaire::has('echeanciers')->each(fn ($s) => $s->updateSoldePaiement());
 
-        return back()->with('success', "{$count} échéanciers mis à jour.");
+        $apres = Echeancier::where('statut', 'en_retard')->count();
+
+        return back()->with('success', "Statuts recalculés : {$apres} échéance(s) en retard (avant : {$avant}).");
+    }
+
+    private function deviner(string $titre): string
+    {
+        $t = mb_strtolower($titre);
+        return match (true) {
+            str_contains($t, 'inscription') => 'inscription',
+            str_contains($t, 'examen')      => 'examen',
+            str_contains($t, 'mensualit') || preg_match('/janv|févr|fevr|mars|avril|mai|juin|juil|août|aout|sept|oct|nov|déc|dec/u', $t) => 'mensualite',
+            default                         => 'autre',
+        };
     }
 }

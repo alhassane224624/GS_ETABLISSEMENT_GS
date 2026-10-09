@@ -44,6 +44,7 @@ class BackupController extends Controller
 
     public function download($filename)
     {
+        $filename = basename($filename);
         if (!Storage::disk('backups')->exists($filename)) {
             abort(404, 'Fichier de sauvegarde non trouvé');
         }
@@ -53,6 +54,7 @@ class BackupController extends Controller
 
     public function delete($filename)
     {
+        $filename = basename($filename);
         try {
             Storage::disk('backups')->delete($filename);
             return response()->json(['success' => true]);

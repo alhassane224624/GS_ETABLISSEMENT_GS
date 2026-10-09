@@ -62,7 +62,7 @@
                                 <select name="type" id="type" class="form-select @error('type') is-invalid @enderror" required>
                                     <option value="">-- Sélectionner --</option>
                                     <option value="pourcentage" {{ old('type') == 'pourcentage' ? 'selected' : '' }}>Pourcentage (%)</option>
-                                    <option value="montant_fixe" {{ old('type') == 'montant_fixe' ? 'selected' : '' }}>Montant Fixe (DH)</option>
+                                    <option value="montant_fixe" {{ old('type') == 'montant_fixe' ? 'selected' : '' }}>Montant fixe (DH par échéance)</option>
                                 </select>
                                 @error('type')
                                     <div class="invalid-feedback">{{ $message }}</div>
@@ -85,6 +85,18 @@
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
                             </div>
+                        </div>
+
+                        <!-- Portée -->
+                        <div class="mb-3">
+                            <label for="porte" class="form-label required">S'applique à</label>
+                            <select name="porte" id="porte" class="form-select @error('porte') is-invalid @enderror">
+                                @foreach (\App\Models\Remise::PORTEES as $cle => $libelle)
+                                    <option value="{{ $cle }}" @selected(old('porte', 'mensualite') === $cle)>{{ $libelle }}</option>
+                                @endforeach
+                            </select>
+                            <small class="text-muted">La remise est déduite des échéances dont la date est comprise dans la période ci-dessus. Les échéances déjà soldées ne changent pas.</small>
+                            @error('porte')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
 
                         <!-- Motif -->

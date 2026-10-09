@@ -28,12 +28,9 @@ class Admin
             ]);
 
             // ✅ Rediriger vers le bon dashboard selon le rôle
-            if ($user->role === 'professeur') {
-                return redirect()->route('professeur.dashboard')
-                    ->with('error', 'Accès non autorisé.');
-            } elseif ($user->role === 'stagiaire') {
-                return redirect()->route('stagiaire.dashboard')
-                    ->with('error', 'Accès non autorisé.');
+            if (in_array($user->role, ['administrateur', 'comptable', 'professeur', 'stagiaire', 'parent'])) {
+                return redirect()->route('dashboard')
+                    ->with('error', 'Accès non autorisé pour votre rôle.');
             }
 
             // Si rôle inconnu, déconnecter

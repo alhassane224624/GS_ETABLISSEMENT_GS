@@ -1,221 +1,115 @@
-@extends('layouts.app')
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inscription en ligne</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { background: linear-gradient(160deg, #4f46e5, #6366f1); min-height: 100vh; font-family: 'Inter', sans-serif; }
+        .card { border: 0; border-radius: 16px; }
+        .section-title { font-size: .85rem; text-transform: uppercase; letter-spacing: .05em; color: #4f46e5; font-weight: 600; }
+        .hp { position: absolute; left: -9999px; }
+    </style>
+</head>
+<body class="py-5">
+<div class="container" style="max-width: 820px">
+    <div class="text-center text-white mb-4">
+        <h1 class="h3 fw-bold"><i class="fas fa-user-graduate me-2"></i>Demande d'inscription</h1>
+        <p class="mb-0 opacity-75">Remplissez le formulaire, l'administration validera votre dossier.</p>
+    </div>
 
-@section('title', 'Inscription Stagiaire')
+    <div class="card shadow-lg">
+        <div class="card-body p-4 p-md-5">
+            @if (session('success'))
+                <div class="alert alert-success"><i class="fas fa-check-circle me-2"></i>{{ session('success') }}</div>
+            @endif
 
-@section('content')
-<div class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-12">
-    <div class="max-w-2xl mx-auto px-4">
-        <!-- En-tête -->
-        <div class="text-center mb-8">
-            <h1 class="text-4xl font-bold text-gray-900 mb-2">
-                <i class="fas fa-user-plus text-blue-600"></i>
-                Inscription Stagiaire
-            </h1>
-            <p class="text-gray-600">Remplissez le formulaire pour vous inscrire</p>
-        </div>
+            @if ($errors->any())
+                <div class="alert alert-danger">
+                    <ul class="mb-0">
+                        @foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach
+                    </ul>
+                </div>
+            @endif
 
-        @if (session('success'))
-            <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-lg mb-6">
-                <i class="fas fa-check-circle mr-2"></i>
-                {{ session('success') }}
-            </div>
-        @endif
+            <form method="POST" action="{{ route('stagiaires.inscription.store') }}" enctype="multipart/form-data">
+                @csrf
+                {{-- Pot de miel anti-robot --}}
+                <input type="text" name="site_web" class="hp" tabindex="-1" autocomplete="off">
 
-        @if ($errors->any())
-            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-6">
-                <i class="fas fa-exclamation-circle mr-2"></i>
-                <strong>Erreurs:</strong>
-                <ul class="mt-2 ml-4 list-disc">
-                    @foreach ($errors->all() as $error)
-                        <li>{{ $error }}</li>
-                    @endforeach
-                </ul>
-            </div>
-        @endif
-
-        <!-- Formulaire -->
-        <form method="POST" action="{{ route('stagiaires.inscription.store') }}" enctype="multipart/form-data" class="bg-white rounded-lg shadow-lg p-8 space-y-6">
-            @csrf
-
-            <!-- Informations de base -->
-            <div class="border-b pb-6">
-                <h2 class="text-xl font-semibold text-gray-900 mb-4">
-                    <i class="fas fa-user text-blue-600"></i>
-                    Informations Personnelles
-                </h2>
-                
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">
-                            Nom <span class="text-red-500">*</span>
-                        </label>
-                        <input type="text" name="nom" value="{{ old('nom') }}" required 
-                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent @error('nom') border-red-500 @enderror">
-                        @error('nom')
-                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                        @enderror
+                <p class="section-title mb-3">Identité</p>
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label">Nom *</label>
+                        <input type="text" name="nom" value="{{ old('nom') }}" class="form-control @error('nom') is-invalid @enderror" required>
                     </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">
-                            Prénom <span class="text-red-500">*</span>
-                        </label>
-                        <input type="text" name="prenom" value="{{ old('prenom') }}" required 
-                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent @error('prenom') border-red-500 @enderror">
-                        @error('prenom')
-                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                        @enderror
+                    <div class="col-md-6">
+                        <label class="form-label">Prénom *</label>
+                        <input type="text" name="prenom" value="{{ old('prenom') }}" class="form-control @error('prenom') is-invalid @enderror" required>
                     </div>
-
-                    <div class="md:col-span-2">
-                        <label class="block text-sm font-medium text-gray-700 mb-2">
-                            Matricule <span class="text-red-500">*</span>
-                        </label>
-                        <input type="text" name="matricule" value="{{ old('matricule') }}" required 
-                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent @error('matricule') border-red-500 @enderror"
-                            placeholder="Ex: ST2024001">
-                        @error('matricule')
-                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                        @enderror
+                    <div class="col-md-6">
+                        <label class="form-label">Date de naissance</label>
+                        <input type="date" name="date_naissance" value="{{ old('date_naissance') }}" class="form-control @error('date_naissance') is-invalid @enderror">
                     </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">
-                            Date de Naissance
-                        </label>
-                        <input type="date" name="date_naissance" value="{{ old('date_naissance') }}" 
-                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent @error('date_naissance') border-red-500 @enderror">
-                        @error('date_naissance')
-                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                        @enderror
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">
-                            Sexe
-                        </label>
-                        <select name="sexe" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent @error('sexe') border-red-500 @enderror">
-                            <option value="">Sélectionner</option>
-                            <option value="M" {{ old('sexe') == 'M' ? 'selected' : '' }}>Masculin</option>
-                            <option value="F" {{ old('sexe') == 'F' ? 'selected' : '' }}>Féminin</option>
+                    <div class="col-md-6">
+                        <label class="form-label">Sexe</label>
+                        <select name="sexe" class="form-select">
+                            <option value="">—</option>
+                            <option value="M" @selected(old('sexe') === 'M')>Masculin</option>
+                            <option value="F" @selected(old('sexe') === 'F')>Féminin</option>
                         </select>
-                        @error('sexe')
-                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                        @enderror
                     </div>
-
-                    <div class="md:col-span-2">
-                        <label class="block text-sm font-medium text-gray-700 mb-2">
-                            Photo (optionnel)
-                        </label>
-                        <input type="file" name="photo" accept="image/*" 
-                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent @error('photo') border-red-500 @enderror">
-                        <p class="mt-1 text-sm text-gray-500">Format: JPEG, PNG, JPG, GIF (Max: 2MB)</p>
-                        @error('photo')
-                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                        @enderror
+                    <div class="col-12">
+                        <label class="form-label">Photo</label>
+                        <input type="file" name="photo" accept="image/*" class="form-control @error('photo') is-invalid @enderror">
                     </div>
                 </div>
-            </div>
 
-            <!-- Contact -->
-            <div class="border-b pb-6">
-                <h2 class="text-xl font-semibold text-gray-900 mb-4">
-                    <i class="fas fa-phone text-green-600"></i>
-                    Coordonnées
-                </h2>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">
-                            Téléphone
-                        </label>
-                        <input type="tel" name="telephone" value="{{ old('telephone') }}" 
-                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent @error('telephone') border-red-500 @enderror"
-                            placeholder="Ex: 0612345678">
-                        @error('telephone')
-                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                        @enderror
+                <p class="section-title mb-3">Contact</p>
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label">Téléphone *</label>
+                        <input type="tel" name="telephone" value="{{ old('telephone') }}" class="form-control @error('telephone') is-invalid @enderror" required>
                     </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">
-                            Email
-                        </label>
-                        <input type="email" name="email" value="{{ old('email') }}" 
-                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent @error('email') border-red-500 @enderror"
-                            placeholder="exemple@email.com">
-                        @error('email')
-                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                        @enderror
+                    <div class="col-md-6">
+                        <label class="form-label">E-mail *</label>
+                        <input type="email" name="email" value="{{ old('email') }}" class="form-control @error('email') is-invalid @enderror" required>
                     </div>
-
-                    <div class="md:col-span-2">
-                        <label class="block text-sm font-medium text-gray-700 mb-2">
-                            Adresse
-                        </label>
-                        <textarea name="adresse" rows="3" 
-                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent @error('adresse') border-red-500 @enderror"
-                            placeholder="Adresse complète">{{ old('adresse') }}</textarea>
-                        @error('adresse')
-                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                        @enderror
+                    <div class="col-12">
+                        <label class="form-label">Adresse</label>
+                        <textarea name="adresse" rows="2" class="form-control">{{ old('adresse') }}</textarea>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Nom du tuteur / parent</label>
+                        <input type="text" name="nom_tuteur" value="{{ old('nom_tuteur') }}" class="form-control">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Téléphone du tuteur</label>
+                        <input type="tel" name="telephone_tuteur" value="{{ old('telephone_tuteur') }}" class="form-control">
                     </div>
                 </div>
-            </div>
 
-            <!-- Filière -->
-            <div>
-                <h2 class="text-xl font-semibold text-gray-900 mb-4">
-                    <i class="fas fa-graduation-cap text-orange-600"></i>
-                    Filière
-                </h2>
-
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">
-                        Choisissez votre filière <span class="text-red-500">*</span>
-                    </label>
-                    <select name="filiere_id" required 
-                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent @error('filiere_id') border-red-500 @enderror">
-                        <option value="">Sélectionnez une filière</option>
+                <p class="section-title mb-3">Formation souhaitée</p>
+                <div class="mb-4">
+                    <select name="filiere_id" class="form-select @error('filiere_id') is-invalid @enderror" required>
+                        <option value="">Choisir une filière…</option>
                         @foreach ($filieres as $filiere)
-                            <option value="{{ $filiere->id }}" {{ old('filiere_id') == $filiere->id ? 'selected' : '' }}>
-                                {{ $filiere->nom }} - {{ $filiere->code ?? '' }}
+                            <option value="{{ $filiere->id }}" @selected(old('filiere_id') == $filiere->id)>
+                                {{ $filiere->nom }}{{ $filiere->code ? ' — ' . $filiere->code : '' }}
                             </option>
                         @endforeach
                     </select>
-                    @error('filiere_id')
-                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                    @enderror
                 </div>
-            </div>
 
-            <!-- Boutons -->
-            <div class="flex items-center justify-between pt-6 border-t">
-                <a href="{{ route('home') }}" class="text-gray-600 hover:text-gray-900">
-                    <i class="fas fa-arrow-left mr-2"></i>
-                    Retour à l'accueil
-                </a>
-                <button type="submit" class="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition shadow-lg hover:shadow-xl">
-                    <i class="fas fa-paper-plane mr-2"></i>
-                    Soumettre ma demande
-                </button>
-            </div>
-        </form>
-
-        <!-- Informations supplémentaires -->
-        <div class="mt-8 bg-blue-50 rounded-lg p-6 text-sm text-gray-700">
-            <h3 class="font-semibold mb-2">
-                <i class="fas fa-info-circle text-blue-600"></i>
-                Informations importantes
-            </h3>
-            <ul class="space-y-1 ml-4 list-disc">
-                <li>Tous les champs marqués d'une étoile (*) sont obligatoires</li>
-                <li>Votre matricule doit être unique</li>
-                <li>Vous recevrez une confirmation par email après traitement de votre demande</li>
-                <li>Pour toute question, contactez l'administration</li>
-            </ul>
+                <div class="d-flex justify-content-between align-items-center">
+                    <a href="{{ route('welcome') }}" class="text-muted text-decoration-none"><i class="fas fa-arrow-left me-1"></i>Accueil</a>
+                    <button type="submit" class="btn btn-primary px-4"><i class="fas fa-paper-plane me-2"></i>Envoyer ma demande</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
-@endsection
+</body>
+</html>

@@ -2,103 +2,79 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
+use App\Models\ConfigurationPaiement;
 use App\Models\Echeancier;
 use App\Models\Stagiaire;
-use App\Notifications\RappelEcheanceNotification;
 use App\Notifications\RetardPaiementNotification;
+use Illuminate\Console\Command;
 
+/**
+ * Chaque matin :
+ *  1. recalcule le statut des échéances non soldées (passage « en retard ») et prévient le stagiaire UNE fois ;
+ *  2. met à jour le solde de chaque stagiaire ;
+ *  3. suspension automatique (si activée) et réactivation quand le retard est régularisé.
+ * Les rappels avant échéance sont envoyés par paiements:rappels.
+ */
 class CheckRetardsPaiements extends Command
 {
     protected $signature = 'paiements:check-retards';
-    protected $description = 'Vérifier les retards de paiement et envoyer des notifications';
+    protected $description = 'Met à jour les retards de paiement et les soldes des stagiaires';
+
+    private const MOTIF_SUSPENSION = 'Suspension automatique - retard de paiement';
 
     public function handle()
     {
-        $this->info('🔍 Vérification des retards de paiement...');
+        // 1. Statuts des échéances
+        $nouveauxRetards = 0;
+        Echeancier::with('stagiaire.user')->where('montant_restant', '>', 0)->chunkById(200, function ($echeances) use (&$nouveauxRetards) {
+            foreach ($echeances as $echeance) {
+                $avant = $echeance->statut;
+                $echeance->recalculer();
 
-        // 1. Mettre à jour les échéanciers en retard
-        $echeanciersRetard = Echeancier::where('date_echeance', '<', now())
-            ->whereIn('statut', ['impaye', 'paye_partiel'])
-            ->get();
-
-        $countRetards = 0;
-        foreach ($echeanciersRetard as $echeancier) {
-            if ($echeancier->statut !== 'en_retard') {
-                $echeancier->update(['statut' => 'en_retard']);
-                $countRetards++;
-                
-                // Notifier le stagiaire
-                if ($echeancier->stagiaire->user) {
-                    $echeancier->stagiaire->user->notify(
-                        new RetardPaiementNotification($echeancier)
-                    );
+                if ($avant !== 'en_retard' && $echeance->statut === 'en_retard') {
+                    $nouveauxRetards++;
+                    try {
+                        $echeance->stagiaire?->user?->notify(new RetardPaiementNotification($echeance));
+                    } catch (\Throwable $e) {
+                        report($e);
+                    }
                 }
             }
-        }
+        });
+        $this->info("{$nouveauxRetards} échéance(s) passée(s) en retard.");
 
-        $this->info("✅ {$countRetards} échéanciers marqués en retard");
+        // 2. Soldes
+        Stagiaire::has('echeanciers')->chunkById(200, fn ($stagiaires) => $stagiaires->each->updateSoldePaiement());
+        $this->info('Soldes des stagiaires mis à jour.');
 
-        // 2. Envoyer des rappels pour les échéances proches
-        $delaiRappel = \App\Models\ConfigurationPaiement::get('delai_rappel_echeance', 7);
-        $dateRappel = now()->addDays($delaiRappel);
+        // 3. Suspension / réactivation automatiques (0 = désactivé)
+        $jours = (int) ConfigurationPaiement::get('max_retard_avant_suspension', 0);
+        if ($jours > 0) {
+            $limite = now()->subDays($jours)->toDateString();
 
-        $echeanciersAVenir = Echeancier::whereBetween('date_echeance', [now(), $dateRappel])
-            ->whereIn('statut', ['impaye', 'paye_partiel'])
-            ->where('notification_envoyee', false)
-            ->get();
+            $suspendus = Stagiaire::where('statut', 'actif')
+                ->whereHas('echeanciers', fn ($q) => $q->where('montant_restant', '>', 0)->whereDate('date_echeance', '<', $limite))
+                ->get();
 
-        $countRappels = 0;
-        foreach ($echeanciersAVenir as $echeancier) {
-            if ($echeancier->stagiaire->user) {
-                $echeancier->stagiaire->user->notify(
-                    new RappelEcheanceNotification($echeancier)
-                );
-                
-                $echeancier->update([
-                    'notification_envoyee' => true,
-                    'notification_sent_at' => now(),
-                ]);
-                
-                $countRappels++;
+            foreach ($suspendus as $stagiaire) {
+                $stagiaire->update(['statut' => 'suspendu', 'motif_statut' => self::MOTIF_SUSPENSION . " (plus de {$jours} jours)"]);
+                $stagiaire->user?->update(['is_active' => false]);
             }
+
+            // Réactivation : seulement ceux suspendus par cette commande et désormais à jour
+            $reactives = Stagiaire::where('statut', 'suspendu')
+                ->where('motif_statut', 'like', self::MOTIF_SUSPENSION . '%')
+                ->whereDoesntHave('echeanciers', fn ($q) => $q->where('montant_restant', '>', 0)->whereDate('date_echeance', '<', $limite))
+                ->get();
+
+            foreach ($reactives as $stagiaire) {
+                $stagiaire->update(['statut' => 'actif', 'motif_statut' => null]);
+                $stagiaire->user?->update(['is_active' => true]);
+            }
+
+            $this->info("{$suspendus->count()} suspension(s), {$reactives->count()} réactivation(s).");
         }
 
-        $this->info("📧 {$countRappels} rappels d'échéance envoyés");
-
-        // 3. Mettre à jour les statuts de paiement des stagiaires
-        $stagiaires = Stagiaire::all();
-        foreach ($stagiaires as $stagiaire) {
-            $stagiaire->updateSoldePaiement();
-        }
-
-        $this->info("✅ Statuts des stagiaires mis à jour");
-
-        // 4. Vérifier les suspensions automatiques
-        $maxRetard = \App\Models\ConfigurationPaiement::get('max_retard_avant_suspension', 60);
-        $dateLimite = now()->subDays($maxRetard);
-
-        $stagiairesSuspendre = Stagiaire::whereHas('echeanciers', function($q) use ($dateLimite) {
-            $q->where('statut', 'en_retard')
-              ->where('date_echeance', '<', $dateLimite);
-        })
-        ->where('statut_paiement', '!=', 'suspendu')
-        ->get();
-
-        $countSuspensions = 0;
-        foreach ($stagiairesSuspendre as $stagiaire) {
-            $stagiaire->update([
-                'statut_paiement' => 'suspendu',
-                'statut' => 'suspendu',
-                'motif_statut' => 'Suspension automatique - Retard de paiement supérieur à ' . $maxRetard . ' jours'
-            ]);
-            $countSuspensions++;
-        }
-
-        $this->info("⚠️ {$countSuspensions} stagiaires suspendus pour retard de paiement");
-
-        $this->info('✅ Vérification terminée avec succès !');
-        
         return Command::SUCCESS;
     }
 }

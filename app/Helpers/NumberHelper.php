@@ -22,6 +22,23 @@ class NumberHelper
         return $result;
     }
 
+    /**
+     * Montant en toutes lettres avec majuscule : "Deux cents dirhams et cinquante centimes"
+     */
+    public static function montantEnLettres($montant, string $devise = 'dirhams'): string
+    {
+        $montant = round((float) $montant, 2);
+        $entier = (int) floor($montant);
+        $centimes = (int) round(($montant - $entier) * 100);
+
+        $texte = self::nombreEnLettres($entier) . ' ' . ($entier > 1 ? $devise : rtrim($devise, 's'));
+        if ($centimes > 0) {
+            $texte .= ' et ' . self::nombreEnLettres($centimes) . ' centime' . ($centimes > 1 ? 's' : '');
+        }
+
+        return mb_strtoupper(mb_substr($texte, 0, 1)) . mb_substr($texte, 1);
+    }
+
     private static function nombreEnLettres($nombre)
     {
         if ($nombre == 0) {
@@ -65,6 +82,9 @@ class NumberHelper
 
         if ($nombre < 80) {
             $unit = $nombre - 60;
+            if ($unit == 11) {
+                return 'soixante et onze';
+            }
             if ($unit < 17 && $unit > 10) {
                 return 'soixante-' . $exceptions[$unit - 11];
             }
@@ -109,7 +129,8 @@ class NumberHelper
             if ($mille == 1) {
                 $result = 'mille';
             } else {
-                $result = self::nombreEnLettres($mille) . ' mille';
+                // "deux cent mille", "quatre-vingt mille" : pas de « s » devant mille
+                $result = preg_replace('/(cent|vingt)s$/', '$1', self::nombreEnLettres($mille)) . ' mille';
             }
             
             if ($reste > 0) {
