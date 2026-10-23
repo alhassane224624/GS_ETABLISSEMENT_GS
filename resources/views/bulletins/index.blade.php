@@ -2,6 +2,13 @@
 
 @section('content')
 <div class="container-fluid">
+    @php $notesEnAttente = \App\Http\Controllers\NotesEnAttenteController::nombre(); @endphp
+    @if ($notesEnAttente > 0)
+        <div class="alert alert-warning d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <span><i class="fas fa-exclamation-triangle me-2"></i><strong>{{ $notesEnAttente }} note(s)</strong> saisies par les professeurs ne sont pas encore publiées : elles ne seront pas comptées dans les bulletins générés.</span>
+            <a href="{{ route('notes.en-attente') }}" class="btn btn-sm btn-warning">Voir le détail</a>
+        </div>
+    @endif
     <div class="row mb-4">
         <div class="col-md-12">
             <div class="d-flex justify-content-between align-items-center">

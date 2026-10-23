@@ -31,4 +31,10 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    // Notifications aux parents : toujours dans le portail, et par e-mail si activé
+    // (nécessite une configuration MAIL_* valide dans .env)
+    'parents' => [
+        'mail' => (bool) env('PARENTS_NOTIFICATIONS_MAIL', false),
+    ],
+
 ];

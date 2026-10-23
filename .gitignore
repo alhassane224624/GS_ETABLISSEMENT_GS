@@ -1,6 +1,6 @@
 /.phpunit.cache
 /node_modules
-/public/build
+# public/build est versionné : le serveur n'a pas besoin de Node (npm run build avant chaque commit qui touche resources/css ou resources/js)
 /public/hot
 /public/storage
 /storage/*.key

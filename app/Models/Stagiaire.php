@@ -125,6 +125,17 @@ class Stagiaire extends Model
     // ========================================================================
 
     /** Comptes parents / tuteurs ayant accès au suivi */
+    /** Notes visibles par le stagiaire (celles des professeurs attendent une publication de résultats) */
+    public function notesPubliees()
+    {
+        return $this->notes()->whereNotNull('publie_at');
+    }
+
+    public function rendus()
+    {
+        return $this->hasMany(Rendu::class);
+    }
+
     public function parents()
     {
         return $this->belongsToMany(User::class, 'parent_stagiaire', 'stagiaire_id', 'user_id')

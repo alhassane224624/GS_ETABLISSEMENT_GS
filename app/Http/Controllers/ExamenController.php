@@ -148,7 +148,7 @@ class ExamenController extends Controller
     public function mesEpreuves()
     {
         $user = Auth::user();
-        $filieres = $user->filieres()->pluck('filieres.id');
+        $filieres = $user->filieresActives()->pluck('filieres.id');
 
         $epreuves = Epreuve::with(['examen', 'classe', 'matiere'])
             ->whereHas('examen', fn ($q) => $q->where('statut', '!=', 'cloturee'))
@@ -169,7 +169,7 @@ class ExamenController extends Controller
         $epreuve->loadMissing('classe');
         abort_unless(
             $user->role === 'professeur'
-            && $user->filieres()->where('filieres.id', $epreuve->classe->filiere_id)->exists()
+            && $user->filieresActives()->where('filieres.id', $epreuve->classe->filiere_id)->exists()
             && $user->canTeachMatiere($epreuve->matiere_id),
             403,
             'Vous n\'enseignez pas cette matière dans cette classe.'

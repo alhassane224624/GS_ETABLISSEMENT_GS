@@ -14,14 +14,48 @@
 </div>
 
 <ul class="nav nav-tabs mb-3" role="tablist">
-    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#t-resultats">Résultats</button></li>
+    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#t-notes">Notes</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-resultats">Bulletins</button></li>
     <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-absences">Absences</button></li>
     <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-devoirs">Travail à faire</button></li>
     <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-paiements">Paiements</button></li>
 </ul>
 
 <div class="tab-content">
-    <div class="tab-pane fade show active" id="t-resultats">
+    <div class="tab-pane fade show active" id="t-notes">
+        @if ($moyennesMatieres->isNotEmpty())
+            <div class="row g-2 mb-3">
+                @foreach ($moyennesMatieres as $m)
+                    <div class="col-6 col-md-4 col-lg-3">
+                        <div class="card shadow-sm h-100"><div class="card-body py-2">
+                            <div class="small text-muted text-truncate" title="{{ $m['matiere'] }}">{{ $m['matiere'] }}</div>
+                            <div class="fs-5 fw-bold {{ $m['moyenne'] < 10 ? 'text-danger' : 'text-success' }}">{{ number_format($m['moyenne'], 2, ',', '') }}<small class="text-muted fs-6">/20</small></div>
+                            <div class="small text-muted">{{ $m['nombre'] }} note(s)</div>
+                        </div></div>
+                    </div>
+                @endforeach
+            </div>
+        @endif
+        <div class="card shadow-sm"><div class="table-responsive"><table class="table align-middle mb-0">
+            <thead class="table-light"><tr><th>Date</th><th>Matière</th><th>Type</th><th class="text-center">Note</th><th>Commentaire</th></tr></thead>
+            <tbody>
+            @forelse ($notes as $n)
+                <tr>
+                    <td class="small">{{ $n->publie_at?->format('d/m/Y') }}</td>
+                    <td>{{ $n->matiere->nom ?? '—' }}</td>
+                    <td class="small">{{ $n->type_note_libelle }}</td>
+                    <td class="text-center"><span class="badge fs-6 bg-{{ $n->note_sur_20 >= 10 ? 'success' : 'danger' }}">{{ rtrim(rtrim(number_format($n->note, 2, ',', ''), '0'), ',') }}/{{ (int) $n->note_sur }}</span></td>
+                    <td class="small text-muted">{{ $n->commentaire }}</td>
+                </tr>
+            @empty
+                <tr><td colspan="5" class="text-center text-muted py-4">Aucune note publiée pour le moment.</td></tr>
+            @endforelse
+            </tbody>
+        </table></div></div>
+        <small class="text-muted">Les notes apparaissent dès que le professeur publie les résultats.</small>
+    </div>
+
+    <div class="tab-pane fade" id="t-resultats">
         <div class="card shadow-sm"><div class="table-responsive"><table class="table align-middle mb-0">
             <thead class="table-light"><tr><th>Période</th><th class="text-center">Moyenne</th><th class="text-center">Rang</th><th>Appréciation</th><th></th></tr></thead>
             <tbody>

@@ -49,6 +49,15 @@ class LoginRequest extends FormRequest
             ]);
         }
 
+        // Un compte désactivé ne doit pas pouvoir ouvrir de session
+        if (! Auth::user()->is_active) {
+            Auth::guard('web')->logout();
+
+            throw ValidationException::withMessages([
+                'email' => 'Votre compte a été désactivé. Contactez l\'administration.',
+            ]);
+        }
+
         RateLimiter::clear($this->throttleKey());
     }
 

@@ -50,6 +50,13 @@ class ParentController extends Controller
             'stagiaire' => $stagiaire,
             'enfants' => Auth::user()->enfants()->get(['stagiaires.id', 'nom', 'prenom']),
             'bulletins' => $stagiaire->bulletins()->whereNotNull('validated_at')->with('periode')->latest('validated_at')->get(),
+            // Notes publiées uniquement (celles des professeurs apparaissent à la publication des résultats)
+            'notes' => $stagiaire->notesPubliees()->with(['matiere:id,nom', 'periode:id,nom'])->latest('publie_at')->limit(40)->get(),
+            'moyennesMatieres' => $stagiaire->notesPubliees()->with('matiere:id,nom')->get()
+                ->groupBy('matiere_id')
+                ->map(fn ($n) => ['matiere' => $n->first()->matiere->nom ?? '—', 'moyenne' => $n->avg('note_sur_20'), 'nombre' => $n->count()])
+                ->sortBy('matiere')
+                ->values(),
             'absences' => $stagiaire->absences()->with('planning.matiere')->latest('date')->limit(30)->get(),
             'echeances' => $stagiaire->echeanciers()->orderBy('date_echeance')->get(),
             'paiements' => $stagiaire->paiements()->where('statut', 'valide')->latest('date_paiement')->limit(20)->get(),
@@ -65,6 +72,16 @@ class ParentController extends Controller
 
         $bulletin->loadMissing(['stagiaire', 'periode.anneeScolaire', 'classe.filiere']);
         return Pdf::loadView('bulletins.pdf', compact('bulletin'))->download('bulletin_' . $stagiaire->matricule . '.pdf');
+    }
+
+    /** Notifications du parent (absences, résultats, bulletins) : affichées puis marquées comme lues */
+    public function notifications()
+    {
+        $user = Auth::user();
+        $notifications = $user->notifications()->latest()->paginate(20);
+        $user->unreadNotifications()->update(['read_at' => now()]);
+
+        return view('parent.notifications', compact('notifications'));
     }
 
     public function recu(Stagiaire $stagiaire, Paiement $paiement)
@@ -112,6 +129,11 @@ class ParentController extends Controller
                 'created_by' => Auth::id(),
             ]);
             $user->forceFill(['email_verified_at' => now()])->save();
+        }
+
+        // Compte désactivé lors du retrait de son dernier enfant : on le réactive
+        if (!$user->is_active) {
+            $user->update(['is_active' => true]);
         }
 
         $user->enfants()->syncWithoutDetaching([$stagiaire->id => ['lien' => $data['lien']]]);

@@ -13,8 +13,12 @@ class NotificationController extends Controller
     /**
      * Affiche la liste des notifications
      */
-    public function index(): View
+    public function index()
     {
+        if (Auth::user()->role === 'parent') {
+            return redirect()->route('parent.notifications');
+        }
+
         $notifications = Auth::user()
             ->notifications()
             ->latest()
@@ -22,7 +26,15 @@ class NotificationController extends Controller
 
         $unreadCount = Auth::user()->unreadNotifications()->count();
 
-        return view('notifications.index', compact('notifications', 'unreadCount'));
+        // Chaque rôle consulte ses notifications dans son propre espace
+        $layout = match (Auth::user()->role) {
+            'professeur' => 'layouts.app-professeur',
+            'stagiaire' => 'layouts.app-stagiaire',
+            'comptable' => 'layouts.comptable',
+            default => 'layouts.app',
+        };
+
+        return view('notifications.index', compact('notifications', 'unreadCount', 'layout'));
     }
 
     /**

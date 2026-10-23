@@ -101,6 +101,7 @@ class NoteController extends Controller
         if ($stagiaire && $stagiaire->user) {
             $stagiaire->user->notify(new NoteCreated($note));
         }
+        app(\App\Services\NotificationsParents::class)->resultats([$note]);
 
         return redirect()->route('notes.index')
             ->with('success', 'Note ajoutée avec succès.');

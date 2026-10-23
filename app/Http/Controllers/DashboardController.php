@@ -128,7 +128,7 @@ class DashboardController extends Controller
         $user = Auth::user();
 
         // Récupérer les filières du professeur
-        $filieres = $user->filieres()
+        $filieres = $user->filieresActives()
             ->withCount(['stagiaires' => function($query) {
                 $query->where('is_active', true);
             }])
@@ -199,13 +199,13 @@ class DashboardController extends Controller
         $stagiaire = Stagiaire::where('user_id', $user->id)->firstOrFail();
 
         // Statistiques
-        $moyenne_generale = $stagiaire->notes()->avg('note') ?? 0;
-        $total_notes = $stagiaire->notes()->count();
+        $moyenne_generale = $stagiaire->notesPubliees()->get()->avg('note_sur_20') ?? 0;
+        $total_notes = $stagiaire->notesPubliees()->count();
         $total_absences = $stagiaire->absences()->count();
         $absences_injustifiees = $stagiaire->absences()->where('justifiee', false)->count();
 
         // Dernières notes
-        $recent_notes = $stagiaire->notes()
+        $recent_notes = $stagiaire->notesPubliees()
             ->with('matiere')
             ->latest()
             ->take(5)

@@ -14,6 +14,13 @@
         <a class="navbar-brand" href="{{ route('parent.index') }}"><i class="fas fa-user-friends me-2"></i>{{ \App\Support\Etablissement::get('nom') }} — Espace parents</a>
         <div class="d-flex align-items-center gap-3 text-white">
             <span class="d-none d-md-inline small">{{ auth()->user()->name }}</span>
+            @php $nonLues = auth()->user()->unreadNotifications()->count(); @endphp
+            <a href="{{ route('parent.notifications') }}" class="text-white position-relative" title="Notifications">
+                <i class="fas fa-bell"></i>
+                @if ($nonLues)
+                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size: .6rem;">{{ $nonLues > 9 ? '9+' : $nonLues }}</span>
+                @endif
+            </a>
             <a href="{{ route('profile.edit') }}" class="text-white" title="Mon compte / mot de passe"><i class="fas fa-user-cog"></i></a>
             <form method="POST" action="{{ route('logout') }}">@csrf<button class="btn btn-sm btn-light">Déconnexion</button></form>
         </div>
