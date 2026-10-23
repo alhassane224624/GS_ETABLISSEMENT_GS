@@ -70,7 +70,8 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    // Heure légale marocaine (gère aussi le changement d'heure du Ramadan)
+    'timezone' => env('APP_TIMEZONE', 'Africa/Casablanca'),
 
     /*
     |--------------------------------------------------------------------------

@@ -35,8 +35,8 @@ class StagiaireSpaceController extends Controller
 
             $stagiaire = Stagiaire::where('user_id', $user->id)->firstOrFail();
 
-            $moyenne_generale = $stagiaire->notes()->avg('note') ?? 0;
-            $total_notes = $stagiaire->notes()->count();
+            $moyenne_generale = $stagiaire->notesPubliees()->get()->avg('note_sur_20') ?? 0;
+            $total_notes = $stagiaire->notesPubliees()->count();
             $total_absences = $stagiaire->absences()->count();
             $absences_injustifiees = $stagiaire->absences()->where('justifiee', false)->count();
             $messages_non_lus = Message::where('receiver_id', $user->id)->where('is_read', false)->count();
@@ -82,26 +82,26 @@ class StagiaireSpaceController extends Controller
         $periodeId = $request->input('periode_id');
         $matiereId = $request->input('matiere_id');
 
-        $query = $stagiaire->notes()->with(['matiere', 'creator', 'periode']);
+        $query = $stagiaire->notesPubliees()->with(['matiere', 'creator', 'periode']);
 
         if ($periodeId) $query->where('periode_id', $periodeId);
         if ($matiereId) $query->where('matiere_id', $matiereId);
 
         $notes = $query->latest()->paginate(20);
-        $moyenneGenerale = $stagiaire->notes()->avg('note') ?? 0;
+        $moyenneGenerale = $stagiaire->notesPubliees()->get()->avg('note_sur_20') ?? 0;
 
-        $notesParMatiere = $stagiaire->notes()
+        $notesParMatiere = $stagiaire->notesPubliees()
             ->with('matiere')
             ->get()
             ->groupBy('matiere_id')
             ->map(fn($notes) => [
                 'matiere' => $notes->first()->matiere,
                 'count' => $notes->count(),
-                'moyenne' => $notes->avg('note')
+                'moyenne' => $notes->avg('note_sur_20')
             ]);
 
         $periodes = Periode::orderBy('debut', 'desc')->get();
-        $matieres = Matiere::whereIn('id', $stagiaire->notes->pluck('matiere_id')->unique())->get();
+        $matieres = Matiere::whereIn('id', $stagiaire->notesPubliees()->pluck('matiere_id')->unique())->get();
 
         return view('stagiaires.notes', compact(
             'notes', 'moyenneGenerale', 'notesParMatiere', 'periodes', 'matieres', 'periodeId', 'matiereId'
@@ -116,12 +116,12 @@ class StagiaireSpaceController extends Controller
         $periodeId = $request->input('periode_id');
         $matiereId = $request->input('matiere_id');
 
-        $query = $stagiaire->notes()->with(['matiere', 'periode']);
+        $query = $stagiaire->notesPubliees()->with(['matiere', 'periode']);
         if ($periodeId) $query->where('periode_id', $periodeId);
         if ($matiereId) $query->where('matiere_id', $matiereId);
 
         $notes = $query->latest()->get();
-        $moyenneGenerale = $notes->avg('note') ?? 0;
+        $moyenneGenerale = $notes->avg('note_sur_20') ?? 0;
 
         $pdf = Pdf::loadView('stagiaires.pdf.releve-notes', compact('stagiaire', 'notes', 'moyenneGenerale'));
         return $pdf->download('releve_notes_' . $stagiaire->matricule . '_' . now()->format('Y-m-d') . '.pdf');

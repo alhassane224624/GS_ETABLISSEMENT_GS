@@ -1,10 +1,36 @@
-@extends('layouts.app-stagiaire')
+@extends('layouts.app')
 
-@section('title', 'Mon Profil')
-@section('page-title', 'Mon Profil')
+@section('title', 'Fiche de ' . $stagiaire->prenom . ' ' . $stagiaire->nom)
+@section('page-title', 'Fiche stagiaire')
 
 @section('content')
 <div class="container-fluid profile-page">
+
+    <!-- ===================== ACTIONS ADMINISTRATION ===================== -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+        <a href="{{ route('stagiaires.index') }}" class="btn btn-outline-secondary"><i class="fas fa-arrow-left me-1"></i>Liste des stagiaires</a>
+        <div class="d-flex flex-wrap gap-2">
+            <a href="{{ route('stagiaires.edit', $stagiaire) }}" class="btn btn-primary"><i class="fas fa-edit me-1"></i>Modifier</a>
+            <a href="{{ route('notes.releve', $stagiaire) }}" class="btn btn-outline-primary"><i class="fas fa-file-alt me-1"></i>Relevé de notes</a>
+            <a href="{{ route('paiements.historique', $stagiaire) }}" class="btn btn-outline-success"><i class="fas fa-money-bill-wave me-1"></i>Paiements</a>
+        </div>
+    </div>
+
+    @if ($errors->any())
+        <div class="alert alert-danger">
+            <ul class="mb-0">
+                @foreach ($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
+    @unless ($stagiaire->is_active)
+        <div class="alert alert-warning"><i class="fas fa-user-lock me-2"></i>Compte désactivé : ce stagiaire ne peut pas se connecter.
+            @if ($stagiaire->motif_statut) <span class="text-muted">— {{ $stagiaire->motif_statut }}</span>@endif
+        </div>
+    @endunless
 
     <!-- ===================== BANDEAU DE COUVERTURE ===================== -->
     <div class="profile-cover rounded-4 mb-5 position-relative">
@@ -320,19 +346,82 @@
                 </div>
             </div>
 
-            <!-- Bandeau d'aide -->
-            <div class="help-banner">
-                <div class="d-flex align-items-start gap-3">
-                    <div class="help-icon flex-shrink-0">
-                        <i class="fas fa-info-circle"></i>
+            <!-- Suivi scolaire -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white fw-semibold"><i class="fas fa-chart-line me-2 text-primary"></i>Suivi</div>
+                <div class="card-body">
+                    <div class="row text-center g-3">
+                        <div class="col-6 col-md-3">
+                            <div class="fs-4 fw-bold">{{ $stats['total_notes'] }}</div>
+                            <small class="text-muted">Notes saisies</small>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="fs-4 fw-bold {{ $stats['moyenne_generale'] !== null && $stats['moyenne_generale'] < 10 ? 'text-danger' : 'text-success' }}">
+                                {{ $stats['moyenne_generale'] !== null ? number_format($stats['moyenne_generale'], 2, ',', ' ') : '—' }}
+                            </div>
+                            <small class="text-muted">Moyenne (sur 20)</small>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="fs-4 fw-bold">{{ $stats['total_absences'] }}</div>
+                            <small class="text-muted">Absences</small>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="fs-4 fw-bold {{ $stats['absences_injustifiees'] > 0 ? 'text-warning' : '' }}">{{ $stats['absences_injustifiees'] }}</div>
+                            <small class="text-muted">Non justifiées</small>
+                        </div>
                     </div>
-                    <div>
-                        <h6 class="fw-bold mb-1 text-white">Besoin de modifier vos informations ?</h6>
-                        <p class="text-white-50 mb-0">
-                            Pour toute modification de vos informations personnelles, veuillez contacter l'administration
-                            via la <a href="{{ route('messages.index') }}" class="help-link">messagerie</a>.
-                        </p>
-                    </div>
+                </div>
+            </div>
+
+            <!-- Accès parents -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white fw-semibold"><i class="fas fa-user-friends me-2 text-primary"></i>Accès parents</div>
+                <div class="card-body">
+                    @forelse ($stagiaire->parents as $parent)
+                        <div class="d-flex justify-content-between align-items-center border-bottom py-2">
+                            <div>
+                                <strong>{{ $parent->name }}</strong>
+                                <span class="badge bg-light text-dark border">{{ ['pere' => 'Père', 'mere' => 'Mère', 'tuteur' => 'Tuteur'][$parent->pivot->lien] ?? $parent->pivot->lien }}</span>
+                                @unless ($parent->is_active)<span class="badge bg-warning text-dark">désactivé</span>@endunless
+                                <div class="small text-muted">{{ $parent->email }}{{ $parent->telephone ? ' · ' . $parent->telephone : '' }}</div>
+                            </div>
+                            <form method="POST" action="{{ route('stagiaires.parents.delier', [$stagiaire, $parent]) }}"
+                                  onsubmit="return confirm('Retirer l\'accès de {{ addslashes($parent->name) }} à ce stagiaire ?')">
+                                @csrf @method('DELETE')
+                                <button class="btn btn-sm btn-outline-danger"><i class="fas fa-unlink me-1"></i>Retirer</button>
+                            </form>
+                        </div>
+                    @empty
+                        <p class="text-muted mb-2">Aucun parent n'a encore accès au portail pour ce stagiaire.</p>
+                    @endforelse
+
+                    <form method="POST" action="{{ route('stagiaires.parents.lier', $stagiaire) }}" class="mt-3">
+                        @csrf
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-4">
+                                <label class="form-label small mb-1">Nom du parent</label>
+                                <input type="text" name="nom" value="{{ old('nom', $stagiaire->nom_tuteur) }}" required class="form-control form-control-sm">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small mb-1">E-mail (identifiant)</label>
+                                <input type="email" name="email" value="{{ old('email', $stagiaire->email_tuteur) }}" required class="form-control form-control-sm">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small mb-1">Téléphone</label>
+                                <input type="tel" name="telephone" value="{{ old('telephone', $stagiaire->telephone_tuteur) }}" class="form-control form-control-sm">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small mb-1">Lien</label>
+                                <select name="lien" class="form-select form-select-sm">
+                                    <option value="pere" @selected(old('lien') === 'pere')>Père</option>
+                                    <option value="mere" @selected(old('lien') === 'mere')>Mère</option>
+                                    <option value="tuteur" @selected(old('lien', 'tuteur') === 'tuteur')>Tuteur</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button class="btn btn-sm btn-primary mt-2"><i class="fas fa-link me-1"></i>Donner l'accès au portail parent</button>
+                        <div class="form-text">Si l'e-mail n'a pas encore de compte, un mot de passe provisoire est créé et affiché une seule fois.</div>
+                    </form>
                 </div>
             </div>
         </div>

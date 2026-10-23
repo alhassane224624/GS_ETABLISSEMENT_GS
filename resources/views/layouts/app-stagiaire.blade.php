@@ -271,6 +271,12 @@
         <a href="{{ route('stagiaire.emploi-du-temps') }}" class="nav-link {{ Request::is('stagiaire/emploi-du-temps*') ? 'active' : '' }}">
           <i class="fas fa-calendar-alt"></i><span> Emploi du Temps</span>
         </a>
+        <a href="{{ route('stagiaire.publications.index') }}" class="nav-link {{ Request::is('stagiaire/publications*') ? 'active' : '' }}">
+          <i class="fas fa-bullhorn"></i><span> Devoirs et documents</span>
+        </a>
+        <a href="{{ route('stagiaire.cahier-de-textes') }}" class="nav-link {{ Request::is('stagiaire/cahier-de-textes*') ? 'active' : '' }}">
+          <i class="fas fa-book-open"></i><span> Cahier de textes</span>
+        </a>
         <a href="{{ route('stagiaire.attestation') }}" class="nav-link">
           <i class="fas fa-file-signature"></i><span>Attestation de scolarité</span>
         </a>
@@ -286,6 +292,13 @@
         <a href="{{ route('messages.index') }}" class="nav-link {{ Request::is('messages*') ? 'active' : '' }}">
           <i class="fas fa-envelope"></i><span> Messages</span>
           <span id="message-badge" class="badge-notification" style="display:none;">0</span>
+        </a>
+      </li>
+      <li class="nav-item">
+        @php $notifNonLues = auth()->user()->unreadNotifications()->count(); @endphp
+        <a href="{{ route('notifications.index') }}" class="nav-link {{ Request::is('notifications*') ? 'active' : '' }}">
+          <i class="fas fa-bell"></i><span> Notifications</span>
+          @if ($notifNonLues)<span class="badge-notification">{{ $notifNonLues > 99 ? '99+' : $notifNonLues }}</span>@endif
         </a>
       </li>
 

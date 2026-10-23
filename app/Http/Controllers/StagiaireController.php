@@ -74,7 +74,12 @@ class StagiaireController extends Controller
     public function create()
     {
         $filieres = Filiere::all();
-        $classes = Classe::with('niveau', 'filiere')->where('effectif_actuel', '<', 'effectif_max')->get();
+        // Classes de l'année active ayant encore des places (whereColumn : comparaison entre deux colonnes)
+        $classes = Classe::with('niveau', 'filiere')
+            ->whereHas('anneeScolaire', fn ($q) => $q->where('is_active', true))
+            ->whereColumn('effectif_actuel', '<', 'effectif_max')
+            ->orderBy('nom')
+            ->get();
         $niveaux = Niveau::with('filiere')->get();
         
         return view('stagiaires.create', compact('filieres', 'classes', 'niveaux'));
@@ -139,7 +144,8 @@ class StagiaireController extends Controller
         
         $stats = [
             'total_notes' => $stagiaire->notes()->count(),
-            'moyenne_generale' => $stagiaire->notes()->avg('note'),
+            // Chaque note ramenée sur 20 (les barèmes peuvent différer : /10, /20…)
+            'moyenne_generale' => $stagiaire->notes()->selectRaw('AVG(note * 20 / NULLIF(note_sur, 0)) as moyenne')->value('moyenne'),
             'total_absences' => $stagiaire->absences()->count(),
             'absences_injustifiees' => $stagiaire->absences()->where('justifiee', false)->count(),
         ];
@@ -150,9 +156,14 @@ class StagiaireController extends Controller
     public function edit(Stagiaire $stagiaire)
     {
         $filieres = Filiere::all();
-        $classes = Classe::with('niveau', 'filiere')->get();
+        // Classes de l'année active, plus la classe actuelle du stagiaire même si elle est pleine
+        $classes = Classe::with('niveau', 'filiere')
+            ->where(fn ($q) => $q->whereHas('anneeScolaire', fn ($a) => $a->where('is_active', true))
+                ->orWhere('id', $stagiaire->classe_id))
+            ->orderBy('nom')
+            ->get();
         $niveaux = Niveau::with('filiere')->get();
-        
+
         return view('stagiaires.edit', compact('stagiaire', 'filieres', 'classes', 'niveaux'));
     }
 

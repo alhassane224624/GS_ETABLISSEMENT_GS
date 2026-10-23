@@ -413,6 +413,11 @@
                     <a href="{{ route('notes.index') }}" class="nav-link">
                         <i class="fa fa-clipboard-list me-2"></i> Notes
                     </a>
+                    @php $notesEnAttente = \App\Http\Controllers\NotesEnAttenteController::nombre(); @endphp
+                    <a href="{{ route('notes.en-attente') }}" class="nav-link {{ request()->routeIs('notes.en-attente') ? 'active' : '' }}" style="position: relative;">
+                        <i class="fa fa-hourglass-half me-2"></i> Notes à publier
+                        @if ($notesEnAttente > 0)<span class="nav-badge badge-warning-custom">{{ $notesEnAttente }}</span>@endif
+                    </a>
                     <a href="{{ route('absences.index') }}" class="nav-link">
                         <i class="fa fa-calendar-xmark me-2"></i> Absences
                     </a>

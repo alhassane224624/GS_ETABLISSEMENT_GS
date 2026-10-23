@@ -82,7 +82,8 @@ class SeanceController extends Controller
                     continue;
                 }
 
-                Absence::create([
+                // Les parents sont prévenus une fois la transaction validée
+                $absence = Absence::create([
                     'stagiaire_id'   => $stagiaireId,
                     'planning_id'    => $planning->id,
                     'periode_id'     => Absence::periodePourDate($planning->date->toDateString()),
@@ -95,6 +96,7 @@ class SeanceController extends Controller
                     'justifiee'      => false,
                     'created_by'     => Auth::id(),
                 ]);
+                app(\App\Services\NotificationsParents::class)->absence($absence);
 
                 $etat === 'retard' ? $retards++ : $absents++;
             }

@@ -63,7 +63,7 @@ class BackupController extends Controller
         }
     }
 
-    private function generateBackup($type = 'full')
+    public function generateBackup($type = 'full')
     {
         $timestamp = now()->format('Y_m_d_H_i_s');
         $filename = "backup_{$type}_{$timestamp}";
@@ -89,21 +89,26 @@ class BackupController extends Controller
         $dbHost = config('database.connections.mysql.host');
         
         $sqlFile = storage_path("app/backups/{$filename}.sql");
-        
-        $command = sprintf(
-            'mysqldump --user=%s --password=%s --host=%s %s > %s',
-            escapeshellarg($dbUser),
-            escapeshellarg($dbPass),
-            escapeshellarg($dbHost),
-            escapeshellarg($dbName),
-            escapeshellarg($sqlFile)
-        );
 
-        $process = Process::fromShellCommandline($command);
+        // Pas de shell ni de redirection : --result-file évite de laisser un fichier vide en cas d'échec,
+        // et le mot de passe passe par MYSQL_PWD au lieu d'apparaître dans la liste des processus.
+        $process = new Process([
+            config('database.connections.mysql.dump_binary_path', 'mysqldump'),
+            '--user=' . $dbUser,
+            '--host=' . $dbHost,
+            '--port=' . config('database.connections.mysql.port', 3306),
+            '--single-transaction',
+            '--routines',
+            '--result-file=' . $sqlFile,
+            $dbName,
+        ], null, ['MYSQL_PWD' => (string) $dbPass]);
+        $process->setTimeout(600);
         $process->run();
 
-        if (!$process->isSuccessful()) {
-            throw new \Exception('Échec de la sauvegarde de la base de données: ' . $process->getErrorOutput());
+        if (!$process->isSuccessful() || !is_file($sqlFile) || filesize($sqlFile) === 0) {
+            @unlink($sqlFile);
+            throw new \Exception('Échec de la sauvegarde de la base de données (vérifiez MYSQLDUMP_PATH dans .env) : '
+                . trim($process->getErrorOutput() ?: $process->getOutput()));
         }
 
         // Compresser le fichier SQL

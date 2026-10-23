@@ -5,6 +5,7 @@
 // =============================================================================
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 class Note extends Model
@@ -20,12 +21,48 @@ class Note extends Model
         'note_sur',
         'commentaire',
         'created_by',
+        'publie_at',
     ];
 
     protected $casts = [
         'note' => 'float',
         'note_sur' => 'decimal:1',
+        'publie_at' => 'datetime',
     ];
+
+    protected static function booted(): void
+    {
+        // Une note non publiée n'existe que pour le professeur qui l'a saisie : elle est exclue
+        // des écrans admin, statistiques, exports, bulletins et de l'espace stagiaire.
+        // Pour un traitement qui doit tout voir : Note::withoutGlobalScope('publiees').
+        static::addGlobalScope('publiees', function (Builder $query) {
+            $query->where(function (Builder $q) {
+                $q->whereNotNull('notes.publie_at');
+                if ($auteur = auth()->id()) {
+                    $q->orWhere('notes.created_by', $auteur);
+                }
+            });
+        });
+
+        // Publiée dès la création, sauf si l'appelant passe explicitement publie_at => null
+        // (notes des professeurs, rendues visibles par une publication de résultats)
+        static::creating(function (Note $note) {
+            if (!array_key_exists('publie_at', $note->getAttributes())) {
+                $note->publie_at = now();
+            }
+        });
+    }
+
+    /** Notes visibles par le stagiaire */
+    public function scopePubliees($query)
+    {
+        return $query->whereNotNull('publie_at');
+    }
+
+    public function estPubliee(): bool
+    {
+        return $this->publie_at !== null;
+    }
 
     // Relations
     public function stagiaire()

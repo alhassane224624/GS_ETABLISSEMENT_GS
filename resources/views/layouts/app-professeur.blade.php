@@ -269,6 +269,12 @@
                 </li>
 
                 <li class="nav-item">
+                    <a class="nav-link {{ Request::is('professeur/publications*') ? 'active' : '' }}" href="{{ route('professeur.publications.index') }}">
+                        <i class="fas fa-bullhorn me-2"></i> Publications
+                    </a>
+                </li>
+
+                <li class="nav-item">
                     <a class="nav-link {{ Request::is('professeur/presences*') ? 'active' : '' }}" href="{{ route('professeur.presences') }}">
                         <i class="fas fa-check-circle me-2"></i> Présences
                     </a>
@@ -291,6 +297,14 @@
                     <a id="messages-link" class="nav-link {{ Request::is('messages*') ? 'active' : '' }}" href="{{ route('messages.index') }}">
                         <i class="fas fa-envelope me-2"></i> Messages
                         <span id="message-badge" class="badge-notification" style="display:none;">0</span>
+                    </a>
+                </li>
+
+                <li class="nav-item">
+                    @php $notifNonLues = auth()->user()->unreadNotifications()->count(); @endphp
+                    <a class="nav-link {{ Request::is('notifications*') ? 'active' : '' }}" href="{{ route('notifications.index') }}">
+                        <i class="fas fa-bell me-2"></i> Notifications
+                        @if ($notifNonLues)<span class="badge-notification">{{ $notifNonLues > 99 ? '99+' : $notifNonLues }}</span>@endif
                     </a>
                 </li>
 

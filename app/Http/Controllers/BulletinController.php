@@ -191,9 +191,10 @@ class BulletinController extends Controller
         if ($bulletin->stagiaire && $bulletin->stagiaire->user) {
             $bulletin->stagiaire->user->notify(new BulletinGenerated($bulletin));
         }
+        app(\App\Services\NotificationsParents::class)->bulletin($bulletin);
 
         return redirect()->back()
-            ->with('success', 'Bulletin validé avec succès. Le stagiaire a été notifié.');
+            ->with('success', 'Bulletin validé avec succès. Le stagiaire et ses parents ont été notifiés.');
     }
 
     /**
@@ -240,10 +241,11 @@ class BulletinController extends Controller
                     'validated_by' => Auth::id(),
                 ]);
                 
-                // 🔔 NOTIFICATION : Notifier chaque stagiaire
+                // 🔔 NOTIFICATION : Notifier chaque stagiaire et ses parents
                 if ($bulletin->stagiaire && $bulletin->stagiaire->user) {
                     $bulletin->stagiaire->user->notify(new BulletinGenerated($bulletin));
                 }
+                app(\App\Services\NotificationsParents::class)->bulletin($bulletin);
                 
                 $count++;
             }

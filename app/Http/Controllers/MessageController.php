@@ -164,7 +164,7 @@ class MessageController extends Controller
         }
         abort_unless($user->role === 'professeur', 403, 'Seuls les administrateurs et les professeurs peuvent écrire à un groupe.');
 
-        return $user->filieres()->pluck('filieres.id');
+        return $user->filieresActives()->pluck('filieres.id');
     }
 
     public function showSendGroupForm()

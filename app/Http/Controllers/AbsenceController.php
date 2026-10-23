@@ -85,6 +85,7 @@ class AbsenceController extends Controller
         }
 
         $absence = Absence::create($data);
+        app(\App\Services\NotificationsParents::class)->absence($absence);
 
         // 🔔 NOTIFICATION : Notifier le stagiaire de son absence
         $stagiaire = Stagiaire::find($request->stagiaire_id);

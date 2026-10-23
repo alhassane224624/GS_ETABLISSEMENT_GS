@@ -15,6 +15,12 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        // Jamais de données de démo (comptes au mot de passe « password ») sur le serveur de production
+        if (app()->isProduction()) {
+            $this->command->error('Données de démonstration refusées en production. Créez l\'administrateur avec : php artisan app:creer-admin');
+            return;
+        }
+
         // Jeu de démonstration complet et cohérent (toutes les fonctionnalités).
         // Les anciens seeders restent disponibles : php artisan db:seed --class=NomDuSeeder
         $this->call(DemoSeeder::class);

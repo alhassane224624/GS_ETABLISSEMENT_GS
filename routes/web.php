@@ -6,6 +6,10 @@ use App\Http\Controllers\StagiaireController;
 use App\Http\Controllers\FiliereController;
 use App\Http\Controllers\NoteController;
 use App\Http\Controllers\ProfesseurController;
+use App\Http\Controllers\ProfesseurNoteController;
+use App\Http\Controllers\ProfesseurPresenceController;
+use App\Http\Controllers\ProfesseurPlanningController;
+use App\Http\Controllers\ProfesseurAffectationController;
 use App\Http\Controllers\StagiaireSpaceController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\StatisticsController;
@@ -36,6 +40,9 @@ use App\Http\Controllers\JustificationController;
 use App\Http\Controllers\ExamenController;
 use App\Http\Controllers\FinanceController;
 use App\Http\Controllers\ParentController;
+use App\Http\Controllers\ProfesseurPublicationController;
+use App\Http\Controllers\StagiairePublicationController;
+use App\Http\Controllers\PublicationFichierController;
 use Illuminate\Support\Facades\Route;
 
 // ============================================================================
@@ -159,6 +166,11 @@ Route::middleware(['auth', 'verified', 'stagiaire'])->prefix('stagiaire')->name(
     Route::post('/absences/{absence}/justifier', [JustificationController::class, 'deposer'])->name('absences.justifier');
     Route::get('/absences', [StagiaireSpaceController::class, 'mesAbsences'])->name('absences');
     Route::get('/profil', [StagiaireSpaceController::class, 'monProfil'])->name('profil');
+
+    // 📚 PUBLICATIONS (devoirs, documents, résultats) ET RENDUS
+    Route::get('/publications', [StagiairePublicationController::class, 'index'])->name('publications.index');
+    Route::get('/publications/{publication}', [StagiairePublicationController::class, 'show'])->name('publications.show');
+    Route::post('/publications/{publication}/rendu', [StagiairePublicationController::class, 'deposer'])->name('publications.rendu');
     
     // 💰 PAIEMENTS STAGIAIRE
     Route::get('/mes-paiements', [PaiementController::class, 'mesPaiements'])->name('paiements');
@@ -173,27 +185,32 @@ Route::middleware(['auth', 'verified', 'stagiaire'])->prefix('stagiaire')->name(
 Route::middleware(['auth', 'verified', 'professeur'])->prefix('professeur')->name('professeur.')->group(function () {
     Route::get('/dashboard', [ProfesseurController::class, 'dashboard'])->name('dashboard');
     Route::get('/stagiaires', [ProfesseurController::class, 'index'])->name('stagiaires');
-    Route::get('/stagiaires/{stagiaire}/notes', [ProfesseurController::class, 'showNotes'])->name('stagiaires.notes');
-    Route::post('/stagiaires/{stagiaire}/notes', [ProfesseurController::class, 'storeNote'])->name('stagiaires.notes.store');
-    Route::put('/stagiaires/{stagiaire}/notes/{note}', [ProfesseurController::class, 'updateNote'])->name('stagiaires.notes.update');
-    Route::get('/notes-par-matiere', [ProfesseurController::class, 'notesParMatiere'])->name('notes-par-matiere');
-    Route::get('/notes/export-pdf', [ProfesseurController::class, 'exportNotesPdf'])->name('notes.export-pdf');
-    Route::get('/notes/export-excel', [ProfesseurController::class, 'exportNotesExcel'])->name('notes.export-excel');
+    Route::get('/stagiaires/{stagiaire}/notes', [ProfesseurNoteController::class, 'showNotes'])->name('stagiaires.notes');
+    Route::post('/stagiaires/{stagiaire}/notes', [ProfesseurNoteController::class, 'storeNote'])->name('stagiaires.notes.store');
+    Route::put('/stagiaires/{stagiaire}/notes/{note}', [ProfesseurNoteController::class, 'updateNote'])->name('stagiaires.notes.update');
+    Route::get('/notes-par-matiere', [ProfesseurNoteController::class, 'notesParMatiere'])->name('notes-par-matiere');
+    Route::get('/notes/export-pdf', [ProfesseurNoteController::class, 'exportNotesPdf'])->name('notes.export-pdf');
+    Route::get('/notes/export-excel', [ProfesseurNoteController::class, 'exportNotesExcel'])->name('notes.export-excel');
     Route::get('/stagiaires/export-pdf', [ProfesseurController::class, 'exportStagiairesPdf'])->name('stagiaires.export-pdf');
     Route::get('/stagiaires/export-excel', [ProfesseurController::class, 'exportStagiairesExcel'])->name('stagiaires.export-excel');
-    
-    Route::get('stagiaires-export', [ProfesseurController::class, 'exportStagiairesExcel'])->name('stagiaires.export');
-    Route::get('/presences', [ProfesseurController::class, 'presences'])->name('presences');
-    Route::post('/presences/marquer', [ProfesseurController::class, 'marquerAbsence'])->name('presences.marquer');
-    Route::delete('/presences/{absence}', [ProfesseurController::class, 'supprimerAbsence'])->name('presences.supprimer');
-    Route::get('/planning', [ProfesseurController::class, 'monPlanning'])->name('planning');
+    Route::get('/presences', [ProfesseurPresenceController::class, 'presences'])->name('presences');
+    Route::post('/presences/marquer', [ProfesseurPresenceController::class, 'marquerAbsence'])->name('presences.marquer');
+    Route::delete('/presences/{absence}', [ProfesseurPresenceController::class, 'supprimerAbsence'])->name('presences.supprimer');
+    Route::get('/planning', [ProfesseurPlanningController::class, 'monPlanning'])->name('planning');
     Route::get('/seances/{planning}', [SeanceController::class, 'show'])->name('seance');
     Route::get('/epreuves', [ExamenController::class, 'mesEpreuves'])->name('epreuves');
     Route::get('/epreuves/{epreuve}/saisie', [ExamenController::class, 'saisie'])->name('epreuves.saisie');
     Route::post('/epreuves/{epreuve}/saisie', [ExamenController::class, 'enregistrerSaisie'])->name('epreuves.saisie.store');
     Route::post('/seances/{planning}', [SeanceController::class, 'enregistrer'])->name('seance.enregistrer');
-    Route::get('/planning/create', [ProfesseurController::class, 'createPlanning'])->name('planning.create');
-    Route::post('/planning', [ProfesseurController::class, 'storePlanning'])->name('planning.store');
+    Route::get('/planning/create', [ProfesseurPlanningController::class, 'createPlanning'])->name('planning.create');
+    Route::post('/planning', [ProfesseurPlanningController::class, 'storePlanning'])->name('planning.store');
+
+    // Publications : devoirs, documents, résultats
+    Route::get('/publications', [ProfesseurPublicationController::class, 'index'])->name('publications.index');
+    Route::get('/publications/create', [ProfesseurPublicationController::class, 'create'])->name('publications.create');
+    Route::post('/publications', [ProfesseurPublicationController::class, 'store'])->name('publications.store');
+    Route::get('/publications/{publication}', [ProfesseurPublicationController::class, 'show'])->name('publications.show');
+    Route::delete('/publications/{publication}', [ProfesseurPublicationController::class, 'destroy'])->name('publications.destroy');
 });
 
 // ============================================================================
@@ -214,6 +231,8 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     
     // ⚠️ /notes/export doit être déclarée AVANT la ressource (sinon "export" est pris pour un {note})
     Route::get('/notes/export', [NoteController::class, 'export'])->name('notes.export');
+    Route::get('/notes/en-attente', [\App\Http\Controllers\NotesEnAttenteController::class, 'index'])->name('notes.en-attente');
+    Route::post('/notes/en-attente/{professeur}/relancer', [\App\Http\Controllers\NotesEnAttenteController::class, 'relancer'])->name('notes.en-attente.relancer');
     Route::resource('notes', NoteController::class);
     Route::get('stagiaires/{stagiaire}/releve', [NoteController::class, 'releveStagiaire'])->name('notes.releve');
     
@@ -255,10 +274,10 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::resource('users', UserController::class);
     Route::post('users/{user}/toggle-active', [UserController::class, 'toggleActive'])->name('users.toggle-active');
     
-    Route::get('professeurs/{professeur}/filieres', [ProfesseurController::class, 'editFilieres'])->name('professeurs.filieres.edit');
-    Route::put('professeurs/{professeur}/filieres', [ProfesseurController::class, 'updateFilieres'])->name('professeurs.filieres.update');
-    Route::get('professeurs/{professeur}/matieres', [ProfesseurController::class, 'editMatieres'])->name('professeurs.matieres.edit');
-    Route::put('professeurs/{professeur}/matieres', [ProfesseurController::class, 'updateMatieres'])->name('professeurs.matieres.update');
+    Route::get('professeurs/{professeur}/filieres', [ProfesseurAffectationController::class, 'editFilieres'])->name('professeurs.filieres.edit');
+    Route::put('professeurs/{professeur}/filieres', [ProfesseurAffectationController::class, 'updateFilieres'])->name('professeurs.filieres.update');
+    Route::get('professeurs/{professeur}/matieres', [ProfesseurAffectationController::class, 'editMatieres'])->name('professeurs.matieres.edit');
+    Route::put('professeurs/{professeur}/matieres', [ProfesseurAffectationController::class, 'updateMatieres'])->name('professeurs.matieres.update');
     
     Route::get('import/stagiaires', [ImportController::class, 'showImportForm'])->name('import.stagiaires.form');
     Route::post('import/stagiaires', [ImportController::class, 'importStagiaires'])->name('import.stagiaires');
@@ -384,9 +403,16 @@ Route::get('/documents/{document}/telecharger', [DocumentController::class, 'tel
     ->middleware('auth')
     ->name('documents.telecharger');
 
+// Fichiers privés des publications et des rendus (droits vérifiés dans le contrôleur)
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/publications/{publication}/fichier', [PublicationFichierController::class, 'publication'])->name('publications.fichier');
+    Route::get('/rendus/{rendu}/fichier', [PublicationFichierController::class, 'rendu'])->name('rendus.fichier');
+});
+
 // Portail parents (lecture seule)
-Route::middleware(['auth', 'parent'])->prefix('parent')->name('parent.')->group(function () {
+Route::middleware(['auth', 'verified', 'parent'])->prefix('parent')->name('parent.')->group(function () {
     Route::get('/', [ParentController::class, 'index'])->name('index');
+    Route::get('/notifications', [ParentController::class, 'notifications'])->name('notifications');
     Route::get('/enfants/{stagiaire}', [ParentController::class, 'enfant'])->name('enfant');
     Route::get('/enfants/{stagiaire}/bulletins/{bulletin}', [ParentController::class, 'bulletin'])->name('bulletin');
     Route::get('/enfants/{stagiaire}/recus/{paiement}', [ParentController::class, 'recu'])->name('recu');

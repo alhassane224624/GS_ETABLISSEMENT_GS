@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Auth;
 
-use App\Providers\RouteServiceProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -10,23 +9,27 @@ class RegistrationTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_registration_screen_can_be_rendered(): void
+    // L'inscription libre de Breeze est désactivée : /register renvoie vers la demande d'inscription stagiaire
+    public function test_register_redirects_to_stagiaire_inscription(): void
     {
-        $response = $this->get('/register');
-
-        $response->assertStatus(200);
+        $this->get('/register')->assertRedirect('/inscription-stagiaire');
     }
 
-    public function test_new_users_can_register(): void
+    public function test_stagiaire_inscription_form_can_be_rendered(): void
     {
-        $response = $this->post('/register', [
+        $this->get('/inscription-stagiaire')->assertStatus(200);
+    }
+
+    public function test_posting_to_register_does_not_create_an_account(): void
+    {
+        $this->post('/register', [
             'name' => 'Test User',
             'email' => 'test@example.com',
             'password' => 'password',
             'password_confirmation' => 'password',
         ]);
 
-        $this->assertAuthenticated();
-        $response->assertRedirect(RouteServiceProvider::HOME);
+        $this->assertGuest();
+        $this->assertDatabaseMissing('users', ['email' => 'test@example.com']);
     }
 }

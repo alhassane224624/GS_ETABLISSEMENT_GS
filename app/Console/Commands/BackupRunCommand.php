@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use App\Http\Controllers\BackupController;
+use Illuminate\Support\Facades\Storage;
 
 class BackupRunCommand extends Command
 {

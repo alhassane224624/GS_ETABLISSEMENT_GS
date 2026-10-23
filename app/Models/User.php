@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
 class User extends Authenticatable
 {
-    use Notifiable;
+    use HasFactory, Notifiable;
 
     protected $fillable = [
         'name',
@@ -90,6 +91,14 @@ class User extends Authenticatable
         return $this->belongsToMany(Filiere::class, 'professeur_filiere', 'professeur_id', 'filiere_id')
             ->withPivot('created_by', 'is_active', 'date_assignation', 'remarques')
             ->withTimestamps();
+    }
+
+    /**
+     * Filières dont l'affectation est active : à utiliser pour tout contrôle d'accès du professeur
+     */
+    public function filieresActives()
+    {
+        return $this->filieres()->wherePivot('is_active', true);
     }
 
     /**

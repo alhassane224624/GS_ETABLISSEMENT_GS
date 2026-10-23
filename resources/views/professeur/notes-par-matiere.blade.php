@@ -87,9 +87,12 @@
                                             <span class="badge bg-primary">{{ $note->matiere->nom ?? 'N/A' }}</span>
                                         </td>
                                         <td class="text-center">
-                                            <span class="badge fs-6 {{ $note->note >= 10 ? 'bg-success' : 'bg-danger' }}">
+                                            <span class="badge fs-6 {{ $note->note_sur_20 >= 10 ? 'bg-success' : 'bg-danger' }}">
                                                 {{ number_format($note->note, 2) }}/{{ $note->note_sur ?? 20 }}
                                             </span>
+                                            @unless ($note->estPubliee())
+                                                <div><span class="badge bg-light text-muted border mt-1" title="Visible par le stagiaire après publication des résultats"><i class="fas fa-eye-slash me-1"></i>Non publiée</span></div>
+                                            @endunless
                                         </td>
                                         <td>
                                             <span class="badge bg-info">{{ strtoupper($note->type_note) }}</span>
