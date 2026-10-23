@@ -1,5 +1,103 @@
 # Déploiement en production
 
+Deux options sont décrites :
+
+- **[Option gratuite : alwaysdata Free](#option-gratuite--alwaysdata-free)** — 0 €, idéale pour une démonstration ou un pilote.
+- **[Option payante : mutualisé avec SSH](#prérequis-côté-hébergeur)** (ex. Hostinger Business) — pour un usage réel par l'établissement.
+
+---
+
+## Option gratuite : alwaysdata Free
+
+**Ce que fournit l'offre :** PHP, MySQL, SSH, tâches planifiées, SSL, 1 Go de disque, 256 Mo de RAM, sans carte bancaire.
+**Limites :** adresse `https://<compte>.alwaysdata.net` uniquement, et usage **non lucratif** (conditions alwaysdata) : passez à une offre payante si l'établissement l'utilise réellement avec des paiements.
+
+Dans ce qui suit, remplacez `<compte>` par le nom de votre compte alwaysdata.
+
+### A. Création du compte (interface web)
+
+1. Inscrivez-vous sur alwaysdata.com, offre **Free**. Le nom de compte choisi donne l'adresse du site : `<compte>.alwaysdata.net`.
+2. **Environnement → PHP** : choisissez une version **8.2** (ou 8.3).
+3. **Bases de données → MySQL** : créez une base, par exemple `<compte>_gestion`. Notez l'utilisateur et le mot de passe affichés.
+4. **Accès distant → SSH** : activez l'accès SSH pour l'utilisateur du compte (désactivé par défaut).
+
+### B. Installation (SSH)
+
+Depuis PowerShell sur votre ordinateur :
+
+```bash
+ssh <compte>@ssh-<compte>.alwaysdata.net
+```
+
+Puis sur le serveur :
+
+```bash
+cd ~
+git clone https://github.com/<compte-github>/<depot>.git app
+cd app
+
+php -v                      # doit afficher 8.2 ou plus
+composer install --no-dev --optimize-autoloader
+# Si « Allowed memory size exhausted » : COMPOSER_MEMORY_LIMIT=-1 composer install --no-dev --optimize-autoloader
+
+cp .env.production.example .env
+nano .env
+```
+
+Dans `.env`, renseignez notamment :
+
+```ini
+APP_URL=https://<compte>.alwaysdata.net
+DB_HOST=mysql-<compte>.alwaysdata.net
+DB_DATABASE=<compte>_gestion
+DB_USERNAME=<utilisateur affiché à la création de la base>
+DB_PASSWORD=<mot de passe>
+```
+
+Enregistrez (`Ctrl+O`, `Entrée`, `Ctrl+X`), puis :
+
+```bash
+php artisan key:generate
+php artisan migrate --force
+php artisan app:creer-admin
+php artisan storage:link
+php artisan config:cache && php artisan route:cache && php artisan view:cache
+```
+
+### C. Brancher le site sur le dossier `public`
+
+**Web → Sites** → modifiez le site `<compte>.alwaysdata.net` :
+
+- Type : **PHP**
+- Répertoire racine : `/app/public` (chemin relatif au dossier personnel `/home/<compte>/`)
+
+Ouvrez `https://<compte>.alwaysdata.net` : la page de connexion doit s'afficher.
+
+### D. Tâches automatiques
+
+**Avancé → Tâches planifiées** → nouvelle tâche :
+
+- Type : **Exécuter la commande**
+- Commande : `cd $HOME/app && php artisan schedule:run`
+- Fréquence : **toutes les minutes** (syntaxe crontab `* * * * *`)
+
+### E. E-mails (mot de passe oublié, notifications aux parents)
+
+Utilisez la boîte e-mail fournie par alwaysdata si votre offre en propose une (menu **E-mails**), sinon un compte Gmail avec un *mot de passe d'application* (`MAIL_HOST=smtp.gmail.com`, `MAIL_PORT=587`, `MAIL_ENCRYPTION=tls`). Après modification : `php artisan config:cache`.
+
+### F. Mises à jour
+
+```bash
+ssh <compte>@ssh-<compte>.alwaysdata.net
+cd ~/app && bash deploy.sh
+```
+
+Poursuivez avec les [vérifications après installation](#5-vérifications-après-installation).
+
+---
+
+## Option payante : mutualisé avec SSH
+
 Guide pas à pas pour un hébergement mutualisé avec accès SSH (exemple : **Hostinger, offre Business**).
 Les commandes sont les mêmes sur un autre hébergeur avec SSH, seuls les menus du panneau changent.
 
