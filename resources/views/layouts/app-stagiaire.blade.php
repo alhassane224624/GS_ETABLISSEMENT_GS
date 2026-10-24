@@ -295,6 +295,13 @@
         </a>
       </li>
       <li class="nav-item">
+        @php $annoncesNonLues = \App\Models\Annonce::nombreNonLues(auth()->user()); @endphp
+        <a href="{{ route('annonces.index') }}" class="nav-link {{ Request::is('annonces*') ? 'active' : '' }}">
+          <i class="fas fa-bullhorn"></i><span> Annonces</span>
+          @if ($annoncesNonLues)<span class="badge-notification">{{ $annoncesNonLues }}</span>@endif
+        </a>
+      </li>
+      <li class="nav-item">
         @php $notifNonLues = auth()->user()->unreadNotifications()->count(); @endphp
         <a href="{{ route('notifications.index') }}" class="nav-link {{ Request::is('notifications*') ? 'active' : '' }}">
           <i class="fas fa-bell"></i><span> Notifications</span>
@@ -378,6 +385,7 @@
       </div>
     @endif
 
+    <x-annonces-bandeau />
     @yield('content')
   </main>
 

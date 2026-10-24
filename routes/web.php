@@ -403,6 +403,24 @@ Route::get('/documents/{document}/telecharger', [DocumentController::class, 'tel
     ->middleware('auth')
     ->name('documents.telecharger');
 
+// Annonces / notes circulaires
+// Rédaction : administration et comptabilité (middleware « financial » dans le contrôleur)
+Route::middleware(['auth', 'verified'])->prefix('gestion/annonces')->name('gestion.annonces.')->group(function () {
+    Route::get('/', [\App\Http\Controllers\GestionAnnonceController::class, 'index'])->name('index');
+    Route::get('/create', [\App\Http\Controllers\GestionAnnonceController::class, 'create'])->name('create');
+    Route::post('/', [\App\Http\Controllers\GestionAnnonceController::class, 'store'])->name('store');
+    Route::get('/{annonce}', [\App\Http\Controllers\GestionAnnonceController::class, 'show'])->name('show');
+    Route::get('/{annonce}/edit', [\App\Http\Controllers\GestionAnnonceController::class, 'edit'])->name('edit');
+    Route::put('/{annonce}', [\App\Http\Controllers\GestionAnnonceController::class, 'update'])->name('update');
+    Route::delete('/{annonce}', [\App\Http\Controllers\GestionAnnonceController::class, 'destroy'])->name('destroy');
+});
+// Consultation : tous les utilisateurs connectés (droits vérifiés dans le contrôleur)
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/annonces', [\App\Http\Controllers\AnnonceController::class, 'index'])->name('annonces.index');
+    Route::get('/annonces/{annonce}', [\App\Http\Controllers\AnnonceController::class, 'show'])->name('annonces.show');
+    Route::get('/annonces/{annonce}/fichier', [\App\Http\Controllers\AnnonceController::class, 'fichier'])->name('annonces.fichier');
+});
+
 // Fichiers privés des publications et des rendus (droits vérifiés dans le contrôleur)
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/publications/{publication}/fichier', [PublicationFichierController::class, 'publication'])->name('publications.fichier');

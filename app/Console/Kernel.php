@@ -31,6 +31,9 @@ class Kernel extends ConsoleKernel
         // Nettoyage des notifications de plus de 30 jours — dimanche 2h00
         $schedule->command('notifications:clean --days=30')->weeklyOn(0, '02:00');
 
+        // Annonces programmées : notification à l'heure de publication
+        $schedule->command('annonces:diffuser')->everyFiveMinutes()->withoutOverlapping();
+
         // Sauvegarde complète — chaque nuit à 1h00
         $schedule->command('backup:run full')->dailyAt('01:00')->withoutOverlapping();
     }

@@ -37,4 +37,9 @@ return [
         'mail' => (bool) env('PARENTS_NOTIFICATIONS_MAIL', false),
     ],
 
+    // Annonces importantes et urgentes : notification dans l'application, et par e-mail si activé
+    'annonces' => [
+        'mail' => (bool) env('ANNONCES_MAIL', false),
+    ],
+
 ];

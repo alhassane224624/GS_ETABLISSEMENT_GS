@@ -404,6 +404,13 @@
                 <i class="fas fa-file-export"></i>
                 <span>Exports</span>
             </a>
+
+            <div class="menu-section-title">Communication</div>
+
+            <a href="{{ route('gestion.annonces.index') }}" class="menu-item {{ request()->routeIs('gestion.annonces.*', 'annonces.*') ? 'active' : '' }}">
+                <i class="fas fa-bullhorn"></i>
+                <span>Annonces</span>
+            </a>
         </nav>
     </aside>
 
@@ -534,6 +541,7 @@
             </div>
             @endif
 
+            <x-annonces-bandeau />
             @yield('content')
         </div>
     </main>

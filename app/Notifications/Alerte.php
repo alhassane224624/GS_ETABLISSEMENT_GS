@@ -48,7 +48,7 @@ class Alerte extends Notification
             ->line($this->message);
 
         if ($this->url) {
-            $mail->action('Voir dans l\'espace parents', $this->url);
+            $mail->action('Ouvrir dans l\'application', $this->url);
         }
 
         return $mail->salutation('L\'administration — ' . \App\Support\Etablissement::get('nom'));

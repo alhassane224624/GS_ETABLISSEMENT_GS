@@ -27,4 +27,14 @@ class Handler extends ExceptionHandler
             //
         });
     }
+
+    /**
+     * Compteurs interrogés en arrière-plan par les menus : une session expirée doit répondre 401 en JSON,
+     * sans mémoriser l'adresse comme page à rouvrir après la connexion (sinon l'utilisateur atterrit sur {"count":0}).
+     */
+    protected function shouldReturnJson($request, Throwable $e)
+    {
+        return parent::shouldReturnJson($request, $e)
+            || $request->is('messages/unread-count', 'notifications/unread-count', 'notifications/recent', 'bulletins/pending-count');
+    }
 }

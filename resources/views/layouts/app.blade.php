@@ -348,6 +348,13 @@
                 </a>
             </li>
 
+            <!-- Annonces / notes circulaires -->
+            <li class="nav-item">
+                <a href="{{ route('gestion.annonces.index') }}" class="nav-link {{ request()->routeIs('gestion.annonces.*', 'annonces.*') ? 'active' : '' }}">
+                    <i class="fa fa-bullhorn me-2"></i> Annonces
+                </a>
+            </li>
+
             <!-- Notifications -->
             <li class="nav-item">
                 <a href="{{ route('notifications.index') }}" 
@@ -562,6 +569,7 @@
             </div>
         @endif
 
+        <x-annonces-bandeau />
         @yield('content')
     </main>
 

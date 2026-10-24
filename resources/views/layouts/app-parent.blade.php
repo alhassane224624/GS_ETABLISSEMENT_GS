@@ -14,6 +14,13 @@
         <a class="navbar-brand" href="{{ route('parent.index') }}"><i class="fas fa-user-friends me-2"></i>{{ \App\Support\Etablissement::get('nom') }} — Espace parents</a>
         <div class="d-flex align-items-center gap-3 text-white">
             <span class="d-none d-md-inline small">{{ auth()->user()->name }}</span>
+            @php $annoncesNonLues = \App\Models\Annonce::nombreNonLues(auth()->user()); @endphp
+            <a href="{{ route('annonces.index') }}" class="text-white position-relative" title="Annonces de l'établissement">
+                <i class="fas fa-bullhorn"></i>
+                @if ($annoncesNonLues)
+                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-warning text-dark" style="font-size: .6rem;">{{ $annoncesNonLues }}</span>
+                @endif
+            </a>
             @php $nonLues = auth()->user()->unreadNotifications()->count(); @endphp
             <a href="{{ route('parent.notifications') }}" class="text-white position-relative" title="Notifications">
                 <i class="fas fa-bell"></i>
@@ -29,6 +36,7 @@
 <main class="container py-4">
     @if (session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
     @if (session('error'))<div class="alert alert-danger">{{ session('error') }}</div>@endif
+    <x-annonces-bandeau />
     @yield('content')
 </main>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
